@@ -6,6 +6,10 @@
 // v4: + MFD tactical screen (mini-map + target list), +4 switches,
 // warning lamp strip, HUD combiner glass with lock symbology, visor
 // reflection, engraved placard, panel rivets/wear (CSS).
+// rev (round canopy, ref-cockpit-round): the frame is one big circular bow
+// (see below); the panel is three displays — TAC RADAR scope left, 8
+// gauges with the ADI centred, ENG / FUEL / SYS bars + quadrant right —
+// and the combiner adds the yellow RECON gate ring with live readouts.
 import * as THREE from 'three';
 
 export class Cockpit {
@@ -15,15 +19,20 @@ export class Cockpit {
     root.classList.add('cockpit');
     root.style.display = 'none';
 
-    // canopy frame: dark pillars + top arch (SVG, over the 3D view)
+    // ROUND CANOPY (rev, ref-cockpit-round): one big circular bow over the
+    // windscreen — a 560-radius circle centred at (640, 585), so the crown
+    // clears the top edge (y 25) and the feet land at x 97 / 1183, just
+    // inside the panel. Thick dark tube + a thin teal inner rim (the
+    // reference's sunlit inner edge) + a faint outer rim. Slim dark side
+    // rails only — no top band, no V nose line: the bow IS the frame.
     const frame = document.createElement('div');
     frame.className = 'cockpit-frame';
     frame.innerHTML = `<svg viewBox="0 0 1280 720" preserveAspectRatio="none">
-      <path d="M0,0 L150,0 L110,720 L0,720 Z" fill="#14181f"/>
-      <path d="M1280,0 L1130,0 L1170,720 L1280,720 Z" fill="#14181f"/>
-      <path d="M0,0 L1280,0 L1280,42 L0,42 Z" fill="#14181f"/>
-      <path d="M150,0 Q640,120 1130,0 L1130,26 Q640,140 150,26 Z" fill="#1a2029"/>
-      <path d="M110,720 L640,470 L1170,720" fill="none" stroke="#14181f" stroke-width="10"/>
+      <path d="M0,0 L46,0 L30,720 L0,720 Z" fill="#14181f"/>
+      <path d="M1280,0 L1234,0 L1250,720 L1280,720 Z" fill="#14181f"/>
+      <path class="canopy-arch" d="M 97,720 A 560,560 0 1 1 1183,720" fill="none" stroke="#10141a" stroke-width="30"/>
+      <path d="M 81,720 A 575,575 0 1 1 1199,720" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="3"/>
+      <path d="M 121,720 A 536,536 0 1 1 1159,720" fill="none" stroke="rgba(120,220,190,0.38)" stroke-width="4"/>
     </svg>`;
     root.appendChild(frame);
 
@@ -41,24 +50,45 @@ export class Cockpit {
     this.hudGlass.height = 720;
     root.appendChild(this.hudGlass);
 
-    // instrument panel (bottom of frame)
+    // instrument panel (bottom of frame). Rev layout, like the reference's
+    // three displays, left to right: TAC RADAR | 8 gauges (ADI centre) |
+    // ENG / FUEL / SYS (bars over the throttle quadrant). Switches, lamps,
+    // yoke, placard and status chips are unchanged.
     this.panel = document.createElement('div');
     this.panel.className = 'cockpit-panel';
     root.appendChild(this.panel);
 
-    // gauge canvas: 8 gauges (v4: slightly smaller, room for the MFD)
+    // rev: MFD first in the flex row, so the radar sits LEFT like the
+    // reference — it is drawn as a circular TAC RADAR scope (see drawMfd).
+    this.mfdCanvas = document.createElement('canvas');
+    this.mfdCanvas.className = 'cockpit-mfd';
+    this.mfdCanvas.width = 260;
+    this.mfdCanvas.height = 190;
+    this.panel.appendChild(this.mfdCanvas);
+
+    // gauge canvas: 8 gauges (rev: slightly narrower, room for ENG)
     this.gaugeCanvas = document.createElement('canvas');
     this.gaugeCanvas.className = 'cockpit-gauges';
-    this.gaugeCanvas.width = 780;
+    this.gaugeCanvas.width = 732;
     this.gaugeCanvas.height = 190;
     this.panel.appendChild(this.gaugeCanvas);
 
-    // v4: MFD — tactical mini-map + target list, right of the gauges
-    this.mfdCanvas = document.createElement('canvas');
-    this.mfdCanvas.className = 'cockpit-mfd';
-    this.mfdCanvas.width = 280;
-    this.mfdCanvas.height = 190;
-    this.panel.appendChild(this.mfdCanvas);
+    // rev: ENG / FUEL / SYS — the reference's right display: THR / FUEL /
+    // HULL bars over the throttle quadrant (the quadrant lives inside this
+    // panel now, levers shortened so the status chips below still clear).
+    this.engPanel = document.createElement('div');
+    this.engPanel.className = 'cockpit-eng';
+    this.engPanel.innerHTML = `
+      <div class="eng-title">ENG / FUEL / SYS</div>
+      <div class="eng-row"><span class="eng-label">THR</span><div class="eng-bar"><div class="eng-fill" id="eng-thr"></div></div><span class="eng-val" id="eng-thr-v">0%</span></div>
+      <div class="eng-row"><span class="eng-label">FUEL</span><div class="eng-bar"><div class="eng-fill" id="eng-fuel"></div></div><span class="eng-val" id="eng-fuel-v">0%</span></div>
+      <div class="eng-row"><span class="eng-label">HULL</span><div class="eng-bar"><div class="eng-fill" id="eng-hull"></div></div><span class="eng-val" id="eng-hull-v">0%</span></div>`;
+    this.panel.appendChild(this.engPanel);
+    this.engBars = {
+      THR: { fill: this.engPanel.querySelector('#eng-thr'), val: this.engPanel.querySelector('#eng-thr-v') },
+      FUEL: { fill: this.engPanel.querySelector('#eng-fuel'), val: this.engPanel.querySelector('#eng-fuel-v') },
+      HULL: { fill: this.engPanel.querySelector('#eng-hull'), val: this.engPanel.querySelector('#eng-hull-v') },
+    };
 
     // missile target strip (HUD glass symbology, mirrored on the panel)
     this.tgtStrip = document.createElement('div');
@@ -121,7 +151,7 @@ export class Cockpit {
     </svg>`;
     this.panel.appendChild(yoke);
 
-    // throttle quadrant: throttle / trim / flaps
+    // throttle quadrant: throttle / trim / flaps (rev: inside ENG / FUEL / SYS)
     this.quadrant = document.createElement('div');
     this.quadrant.className = 'cockpit-quadrant';
     this.quadrant.innerHTML = `
@@ -131,7 +161,7 @@ export class Cockpit {
         <div class="cq-lever"><div class="cq-track"><div class="cq-knob" id="cq-trim"></div></div><span>TRIM</span></div>
         <div class="cq-lever"><div class="cq-track"><div class="cq-knob" id="cq-flp"></div></div><span>FLP</span></div>
       </div>`;
-    this.panel.appendChild(this.quadrant);
+    this.engPanel.appendChild(this.quadrant);
     this.thrKnob = this.quadrant.querySelector('#cq-thr');
     this.trimKnob = this.quadrant.querySelector('#cq-trim');
     this.flpKnob = this.quadrant.querySelector('#cq-flp');
@@ -191,13 +221,19 @@ export class Cockpit {
     x.fillStyle = '#ffd76a'; x.fill();
   }
 
-  draw(flight, papiState, lockState, targets, camera, ultraOn) {
+  draw(flight, papiState, lockState, targets, camera, ultraOn, runner) {
     const x = this.gaugeCanvas.getContext('2d');
     const W = this.gaugeCanvas.width, H = this.gaugeCanvas.height;
     x.clearRect(0, 0, W, H);
-    const r = 56;
+    const r = 52;
     const y0 = 78;
-    const xs = [44, 140, 236, 332, 428, 524, 620, 716];
+    const xs = [40, 131, 222, 313, 404, 495, 586, 677];
+
+    // rev: the centre display is the ADI / HORIZON — header over the
+    // horizon ball (gauge 4), like the reference's middle panel.
+    x.font = 'bold 12px monospace'; x.textAlign = 'center';
+    x.fillStyle = '#3ddc84';
+    x.fillText('ADI / HORIZON', xs[3], 14);
 
     // 1. AIRSPEED (knots, 0-520)
     this.gauge(x, xs[0], y0, r, 'AIRSPEED', (g) => {
@@ -206,21 +242,8 @@ export class Cockpit {
       g.font = 'bold 16px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(flight.speedKt)), 0, r - 34);
     });
-    // 2. ATTITUDE (artificial horizon)
-    this.gauge(x, xs[1], y0, r, 'ATTITUDE', (g) => {
-      g.save();
-      g.beginPath(); g.arc(0, 0, r - 8, 0, Math.PI * 2); g.clip();
-      g.rotate(-flight.roll);
-      g.translate(0, flight.pitch * 90);
-      g.fillStyle = '#3a7bd5'; g.fillRect(-r, -r, r * 2, r);
-      g.fillStyle = '#8a5a30'; g.fillRect(-r, 0, r * 2, r);
-      g.fillStyle = '#ffffff'; g.fillRect(-r, -1.5, r * 2, 3);
-      g.restore();
-      g.fillStyle = '#ffd76a';
-      g.beginPath(); g.moveTo(-16, 0); g.lineTo(-4, 0); g.lineTo(-4, -5); g.lineTo(4, -5); g.lineTo(4, 0); g.lineTo(16, 0); g.lineTo(16, 3); g.lineTo(-16, 3); g.closePath(); g.fill();
-    });
-    // 3. ALTIMETER (feet, 0-4000)
-    this.gauge(x, xs[2], y0, r, 'ALTITUDE', (g) => {
+    // 2. ALTIMETER (feet, 0-4000)
+    this.gauge(x, xs[1], y0, r, 'ALTITUDE', (g) => {
       const a = (-Math.PI * 0.75) + ((flight.altMslFt % 1000) / 1000) * Math.PI * 1.5;
       this.needle(g, r, a);
       const a2 = (-Math.PI * 0.75) + (Math.min(flight.altMslFt, 4000) / 4000) * Math.PI * 1.5;
@@ -228,8 +251,8 @@ export class Cockpit {
       g.font = 'bold 16px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(flight.altMslFt)), 0, r - 34);
     });
-    // 4. HEADING / COMPASS
-    this.gauge(x, xs[3], y0, r, 'HEADING', (g) => {
+    // 3. HEADING / COMPASS
+    this.gauge(x, xs[2], y0, r, 'HEADING', (g) => {
       g.save();
       g.rotate(-flight.heading);
       g.font = 'bold 11px monospace'; g.textAlign = 'center';
@@ -243,6 +266,20 @@ export class Cockpit {
       g.beginPath(); g.moveTo(-5, -(r - 8)); g.lineTo(5, -(r - 8)); g.lineTo(0, -(r - 18)); g.closePath(); g.fill();
       g.font = 'bold 13px monospace'; g.fillStyle = '#7ee8ff';
       g.fillText(String(Math.round(flight.hdgDeg)).padStart(3, '0'), 0, r - 34);
+    });
+    // 4. ATTITUDE / ADI (artificial horizon) — rev: centre of the strip,
+    // under the ADI / HORIZON header, like the reference's middle panel
+    this.gauge(x, xs[3], y0, r, 'ADI', (g) => {
+      g.save();
+      g.beginPath(); g.arc(0, 0, r - 8, 0, Math.PI * 2); g.clip();
+      g.rotate(-flight.roll);
+      g.translate(0, flight.pitch * 90);
+      g.fillStyle = '#3a7bd5'; g.fillRect(-r, -r, r * 2, r);
+      g.fillStyle = '#8a5a30'; g.fillRect(-r, 0, r * 2, r);
+      g.fillStyle = '#ffffff'; g.fillRect(-r, -1.5, r * 2, 3);
+      g.restore();
+      g.fillStyle = '#ffd76a';
+      g.beginPath(); g.moveTo(-16, 0); g.lineTo(-4, 0); g.lineTo(-4, -5); g.lineTo(4, -5); g.lineTo(4, 0); g.lineTo(16, 0); g.lineTo(16, 3); g.lineTo(-16, 3); g.closePath(); g.fill();
     });
     // 5. ENGINE RPM % (afterburner zone past 92%)
     this.gauge(x, xs[4], y0, r, 'RPM %', (g) => {
@@ -324,54 +361,90 @@ export class Cockpit {
     this.lamps.ELEC.classList.toggle('on', true);
     this.lamps.OXY.classList.toggle('on', flight.fuel > 10);
     this.lamps.GEAR.classList.toggle('on', flight.gear);
+    // rev: ENG / FUEL / SYS bars (live values, same colours as the HUD)
+    const setEng = (key, pct, color) => {
+      const b = this.engBars[key];
+      b.fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+      b.fill.style.background = color;
+      b.val.textContent = `${Math.round(pct)}%`;
+    };
+    setEng('THR', flight.throttle * 100, flight.afterburner ? '#7ab8ff' : '#ffd76a');
+    setEng('FUEL', flight.fuel, flight.fuel < 20 ? '#ff5040' : '#35b8c8');
+    setEng('HULL', flight.hull, flight.hull < 50 ? '#ff5040' : '#3ddc84');
     this.drawMfd(flight, targets, lk, ultraOn);
-    this.drawHudGlass(lk, camera);
+    this.drawHudGlass(lk, camera, flight, runner);
   }
 
-  // v4 MFD: tactical mini-map (land/sea, runway, targets, ally) + list.
+  // rev: TAC RADAR — a circular green scope (rings + sweep + blips),
+  // like the reference's left display. Heading-up: own ship fixed at the
+  // centre pointing up, targets plotted by relative bearing / range.
+  // Same tactical content as the v4 MFD (live targets + ally + list).
   drawMfd(flight, targets, lk, ultraOn) {
     const x = this.mfdCanvas.getContext('2d');
-    const W = 280, H = 190;
+    const W = 260, H = 190;
     x.clearRect(0, 0, W, H);
     x.fillStyle = '#06110a'; x.fillRect(0, 0, W, H);
     x.strokeStyle = '#1e5c38'; x.lineWidth = 2; x.strokeRect(1, 1, W - 2, H - 2);
     x.font = 'bold 11px monospace'; x.textAlign = 'left';
-    x.fillStyle = '#3ddc84'; x.fillText('MFD · TACTICAL', 8, 16);
+    x.fillStyle = '#3ddc84'; x.fillText('TAC RADAR · 4 KM', 8, 16);
     x.fillStyle = '#7ee8ff'; x.textAlign = 'right'; x.fillText('RNG 4KM', W - 8, 16);
-    const mapY0 = 22, mapH = 108;
-    x.fillStyle = '#0d2a18'; x.fillRect(4, mapY0, W - 8, mapH * 0.62); // land
-    x.fillStyle = '#0a2e44'; x.fillRect(4, mapY0 + mapH * 0.62, W - 8, mapH * 0.38); // sea
-    x.fillStyle = '#c8b888'; x.fillRect(4, mapY0 + mapH * 0.62 - 1, W - 8, 2); // beach
-    const px = (wx) => ((wx + 2100) / 4200) * (W - 8) + 4;
-    const py = (wz) => mapY0 + ((wz + 2100) / 4200) * mapH;
-    // runway strip
-    x.fillStyle = '#e8e8e8';
-    x.fillRect(px(150) - 1.5, py(-100), 3, py(800) - py(-100));
-    const diamond = (sx, sy, color, r = 5) => {
+    const cx = W / 2, cy = 96, R = 62;
+    // scope face
+    x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2);
+    x.fillStyle = '#04120a'; x.fill();
+    // range rings + crosshair
+    x.strokeStyle = 'rgba(61,220,132,0.4)'; x.lineWidth = 1;
+    for (const r of [R / 3, (2 * R) / 3]) {
+      x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke();
+    }
+    x.beginPath();
+    x.moveTo(cx - R, cy); x.lineTo(cx + R, cy);
+    x.moveTo(cx, cy - R); x.lineTo(cx, cy + R);
+    x.stroke();
+    x.strokeStyle = '#3ddc84'; x.lineWidth = 2;
+    x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2); x.stroke();
+    // sweep: fixed at 40° (frozen frame), faint wedge trailing it
+    const sa = -Math.PI / 2 + (40 * Math.PI) / 180;
+    x.fillStyle = 'rgba(61,220,132,0.07)';
+    x.beginPath(); x.moveTo(cx, cy);
+    x.arc(cx, cy, R, sa - 0.5, sa); x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(61,220,132,0.8)'; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(cx, cy);
+    x.lineTo(cx + Math.cos(sa) * R, cy + Math.sin(sa) * R); x.stroke();
+    // blips: live targets by relative bearing, 4 km scope
+    const RANGE = 4000;
+    const plot = (wx, wz) => {
+      const dx = wx - flight.pos.x, dz = wz - flight.pos.z;
+      const range = Math.hypot(dx, dz);
+      if (range > RANGE) return null;
+      const rel = Math.atan2(dx, -dz) - flight.heading;
+      const rr = (range / RANGE) * (R - 4);
+      return [cx + Math.sin(rel) * rr, cy - Math.cos(rel) * rr];
+    };
+    const diamond = (sx, sy, color, r = 4) => {
       x.strokeStyle = color; x.lineWidth = 2;
       x.beginPath();
       x.moveTo(sx, sy - r); x.lineTo(sx + r, sy); x.lineTo(sx, sy + r); x.lineTo(sx - r, sy);
       x.closePath(); x.stroke();
     };
-    // strike targets (live only)
     if (targets) {
       for (const t of targets) {
         if (!t.alive) continue;
-        diamond(px(t.pos.x), py(t.pos.z), t.id === 'KAIJU-1' ? '#ff5040' : '#ff8a7a');
+        const p = plot(t.pos.x, t.pos.z);
+        if (!p) continue;
+        diamond(p[0], p[1], t.id === 'KAIJU-1' ? '#ff8a7a' : '#3ddc84');
       }
     }
-    // ally giant: cyan diamond
-    if (ultraOn) diamond(px(-480), py(1520), '#7ee8ff', 6);
-    // own ship: white triangle, rotated by heading
-    x.save();
-    x.translate(px(flight.pos.x), py(flight.pos.z));
-    x.rotate(flight.heading);
+    if (ultraOn) {
+      const p = plot(-480, 1520);
+      if (p) diamond(p[0], p[1], '#7ee8ff', 5);
+    }
+    // own ship: white triangle, nose up (heading-up scope)
     x.fillStyle = '#ffffff';
-    x.beginPath(); x.moveTo(0, -7); x.lineTo(5, 6); x.lineTo(-5, 6); x.closePath(); x.fill();
-    x.restore();
-    // target list
+    x.beginPath(); x.moveTo(cx, cy - 7); x.lineTo(cx + 5, cy + 6); x.lineTo(cx - 5, cy + 6); x.closePath(); x.fill();
+    // target list (2 rows fit under the scope)
     x.font = '10px monospace'; x.textAlign = 'left';
-    let ly = 146;
+    let ly = 172;
     const rows = [];
     if (targets) {
       for (const t of targets) {
@@ -381,7 +454,7 @@ export class Cockpit {
       }
     }
     if (ultraOn) rows.push(['ULTRA-1', 'ALLY', 'BEAM']);
-    for (const [name, dist, tag] of rows.slice(0, 3)) {
+    for (const [name, dist, tag] of rows.slice(0, 2)) {
       x.fillStyle = name === 'KAIJU-1' ? '#ff8a7a' : name === 'ULTRA-1' ? '#7ee8ff' : '#e8e4d8';
       x.fillText(name, 8, ly);
       x.fillStyle = '#7ee8ff'; x.textAlign = 'right';
@@ -389,14 +462,19 @@ export class Cockpit {
       x.fillStyle = '#ffd76a';
       x.fillText(tag, W - 8, ly);
       x.textAlign = 'left';
-      ly += 14;
+      ly += 13;
     }
   }
 
   // v4 HUD combiner glass: green symbology over the windscreen —
   // corner brackets + the lock diamond / range / SHOOT at the target's
   // projected position, plus a faint sun glare streak.
-  drawHudGlass(lk, camera) {
+  // Rev: + the RECON gate designator — a yellow combiner circle around
+  // the real next gate ring (radius from its true distance), with RECON
+  // and the live speed / altitude / Mach / G / fuel readouts flanking it,
+  // like the reference's green HUD. (The DOM gate labels step aside in
+  // cockpit mode; this ring carries the distance instead.)
+  drawHudGlass(lk, camera, flight, runner) {
     const x = this.hudGlass.getContext('2d');
     const W = 1280, H = 720;
     x.clearRect(0, 0, W, H);
@@ -434,6 +512,48 @@ export class Cockpit {
           lk.locked ? `${lk.target.name} · ${Math.round(lk.range || 0)}m · SHOOT` : `${lk.target.name} · LOCK ${Math.round((lk.progress || 0) * 100)}%`,
           sx, sy + s + 24,
         );
+      }
+    }
+    // RECON gate designator on the next gate (live numbers, honest range)
+    const nextGate = runner ? runner.nextGatePos() : null;
+    if (nextGate && flight && camera) {
+      const v = new THREE.Vector3().copy(nextGate).project(camera);
+      if (v.z < 1) {
+        const sx = (v.x * 0.5 + 0.5) * W;
+        const sy = (-v.y * 0.5 + 0.5) * H;
+        const dist = camera.position.distanceTo(nextGate);
+        if (dist > 50 && sx > 110 && sx < W - 110 && sy > 70 && sy < 460) {
+          const ringR = Math.min(200, (30 / dist) * (H / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+          const rr = ringR + 16;
+          x.strokeStyle = '#ffd76a'; x.lineWidth = 2.5;
+          x.beginPath(); x.arc(sx, sy, rr, 0, Math.PI * 2); x.stroke();
+          x.beginPath();
+          for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+            x.moveTo(sx + dx * (rr + 4), sy + dy * (rr + 4));
+            x.lineTo(sx + dx * (rr + 14), sy + dy * (rr + 14));
+          }
+          x.stroke();
+          const gateLabel = runner.nextGate < runner.gates.length
+            ? `G-${String(runner.nextGate + 1).padStart(2, '0')}` : 'GATE';
+          const mach = flight.speedKt / 661.7;
+          x.textAlign = 'center';
+          x.font = 'bold 15px monospace'; x.fillStyle = '#6effaa';
+          x.fillText('RECON', sx, sy - rr - 14);
+          x.font = 'bold 13px monospace'; x.fillStyle = '#ffd76a';
+          x.fillText(`${gateLabel} · ${Math.round(dist)} m`, sx, sy + rr + 18);
+          // flank readouts, reference layout: speed left, altitude right
+          x.font = 'bold 17px monospace'; x.fillStyle = '#6effaa';
+          x.textAlign = 'right';
+          x.fillText(`${Math.round(flight.speedKt)} KT`, sx - rr - 16, sy - 4);
+          x.font = 'bold 13px monospace';
+          x.fillText(`M ${mach.toFixed(2)}`, sx - rr - 16, sy + 16);
+          x.fillText(`G ${flight.g.toFixed(1)}`, sx - rr - 16, sy + 34);
+          x.textAlign = 'left';
+          x.font = 'bold 17px monospace';
+          x.fillText(`${Math.round(flight.altMslFt)} FT`, sx + rr + 16, sy - 4);
+          x.font = 'bold 13px monospace';
+          x.fillText(`FUEL ${Math.round(flight.fuel)}%`, sx + rr + 16, sy + 16);
+        }
       }
     }
   }

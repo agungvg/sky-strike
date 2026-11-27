@@ -92,8 +92,8 @@ export function buildUltra() {
   // the glowing blue energy blade, the other bent in guard across the
   // chest). Red bands on the upper arms. Model's right arm is side -1
   // (facing +Z, right = -X).
-  const bladeMat = new THREE.MeshBasicMaterial({ color: 0xdff4ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const bladeHaloMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const bladeMat = new THREE.MeshBasicMaterial({ color: 0xaadfff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const bladeHaloMat = new THREE.MeshBasicMaterial({ color: 0x2277ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   {
     const side = -1; // RIGHT arm: thrust forward, energy blade on the fist
     const sh = new THREE.Mesh(new THREE.SphereGeometry(2.8, 10, 8), silver);
@@ -107,17 +107,18 @@ export function buildUltra() {
     add(arm, side * 3.4, 25.5, 4.6);
     const fist = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.0, 2.4), silverDark);
     add(fist, side * 1.1, 24.8, 8.6);
-    // energy blade: flat glowing blade jutting forward from the fist —
-    // bright core + blue halo + pointed tip + base flare. The blade is
-    // the shot's focal weapon (the old beam is hidden in shot 3).
+    // energy blade: THIN glowing blade jutting forward from the fist —
+    // bright blue core + deeper blue halo + pointed tip + base flare.
+    // ITERASI 2: dulu core 2.4 tinggi kebaca PAPAN PUTIH — sekarang
+    // 0.9 tipis + biru elektrik, jadi pedang energi, bukan papan.
     const blade = new THREE.Group();
-    const core = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.4, 15), bladeMat);
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.9, 15), bladeMat);
     core.position.set(0, 0, 7.5);
-    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.4, 15.5), bladeHaloMat);
+    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.6, 15.5), bladeHaloMat);
     halo.position.set(0, 0, 7.5);
     const tip = new THREE.Mesh(new THREE.ConeGeometry(1.2, 4, 4), bladeMat);
     tip.rotation.x = Math.PI / 2; // point forward (+Z)
-    tip.scale.set(0.3, 1, 1.8); // flatten: a blade point, not a spike
+    tip.scale.set(0.22, 1, 1.6); // flatten: a blade point, not a spike
     tip.position.set(0, 0, 16.5);
     const flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(190,230,255,1)', 'rgba(60,140,255,0.7)'),

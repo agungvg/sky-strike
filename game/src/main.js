@@ -100,7 +100,7 @@ class Game {
       if (applyShot(shot, this)) {
         this.renderOnce();
         this.hud.update(0.016, this.hudState());
-        if (this.cameraMode === 'cockpit') this.cockpit.draw(this.flight, this.papiState(), this.missiles.lockState(), this.missiles.targets, this.camera, this.missiles.ultraActive());
+        if (this.cameraMode === 'cockpit') this.cockpit.draw(this.flight, this.papiState(), this.missiles.lockState(), this.missiles.targets, this.camera, this.missiles.ultraActive(), this.runner);
       }
       window.__ready = true;
       window.__game = this;
@@ -579,7 +579,7 @@ class Game {
     // HUD + cockpit
     if (this.state === 'fly' || this.state === 'shot') {
       this.hud.update(dt, this.hudState());
-      if (this.cameraMode === 'cockpit') this.cockpit.draw(f, this.papiState(), this.missiles.lockState(), this.missiles.targets, this.camera, this.missiles.ultraActive());
+      if (this.cameraMode === 'cockpit') this.cockpit.draw(f, this.papiState(), this.missiles.lockState(), this.missiles.targets, this.camera, this.missiles.ultraActive(), this.runner);
     }
   }
 

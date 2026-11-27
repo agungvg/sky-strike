@@ -133,11 +133,14 @@ export function buildKaiju() {
   jaw.rotation.x = 0.35; // hanging open, roaring
   add(jaw, 0, 35.6, 4.2);
   // cyan-glowing mouth interior (reference: the mecha's jaw burns cyan)
-  // + halo sprite so it reads from across the bay
-  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 3.0), new THREE.MeshBasicMaterial({ color: 0x66f6ff }));
+  // + halo sprite so it reads from across the bay. ITERASI 2: dulu
+  // kotak 2.6 + flare 8 — nyaris tidak kelihatan karena rahang menghadap
+  // menjauhi kamera; sekarang 3.6 + flare 14, dan yaw shot diputar
+  // supaya rahang menghadap kamera.
+  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.6, 3.6), new THREE.MeshBasicMaterial({ color: 0x8ff8ff }));
   add(jawGlow, 0, 36.9, 4.6);
-  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
-  jawFlare.scale.set(8, 8, 1);
+  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
+  jawFlare.scale.set(14, 14, 1);
   add(jawFlare, 0, 36.9, 5.6);
   g.userData.jawGlow = jawGlow;
   for (const side of [-1, 1]) {
@@ -214,12 +217,12 @@ export function buildKaiju() {
   // the missile system hides it unless the boss is active or locked.
   const breath = new THREE.Group();
   const mouth = new THREE.Vector3(0, 37.5, 6.8);
-  // up and leaning toward ULTRA-1: in the face-off the kaiju's yaw
-  // turns a forward breath into a giant diagonal across the frame, so
-  // the breath climbs instead of crossing. SHORT (14) and fat — a plume
-  // of flame above the jaw, not a skyscraper laser.
-  const dir = new THREE.Vector3(-0.35, 0.8, 0.3).normalize();
-  const beamLen = 14;
+  // ITERASI 2: dulu breath naik vertikal (dir -0.35, 0.8, 0.3) dan
+  // kebaca KRISTAL MELAYANG di atas kepala. Sekarang breath menyembur
+  // KE DEPAN (local +Z = arah hadap kaiju, ke ULTRA-1) — plume api
+  // horizontal di antara kedua raksasa, bukan menara kristal.
+  const dir = new THREE.Vector3(0.1, 0.18, 1).normalize();
+  const beamLen = 16;
   const blueTex = glowTexture('rgba(190,230,255,1)', 'rgba(40,140,255,0.7)');
   const orient = (mesh) => {
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
@@ -237,7 +240,7 @@ export function buildKaiju() {
   orient(outer);
   outer.position.copy(mouth).addScaledVector(dir, beamLen / 2);
   const tip = new THREE.Mesh(
-    new THREE.ConeGeometry(2.4, 9, 8),
+    new THREE.ConeGeometry(1.6, 6, 8),
     new THREE.MeshBasicMaterial({ color: 0x55ccff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   orient(tip);
@@ -250,7 +253,7 @@ export function buildKaiju() {
     const p = new THREE.Sprite(new THREE.SpriteMaterial({ map: blueTex, transparent: true, opacity: 0.7 - i * 0.1, blending: THREE.AdditiveBlending, depthWrite: false }));
     const s = 7 - i * 0.8;
     p.scale.set(s, s, 1);
-    p.position.copy(mouth).addScaledVector(dir, 8 + i * 9);
+    p.position.copy(mouth).addScaledVector(dir, 6 + i * 5);
     p.position.x += (i % 2 ? 1.5 : -1.5);
     breath.add(p);
   }

@@ -38,6 +38,26 @@ export class HUD {
     // top-right: state chip
     this.stateChip = el('div', 'hud-panel hud-state', root, 'THR 72% · CRUISE');
 
+    // rev: cockpit-mode top-right — FUEL / HULL bars + GEAR / FLAP / BRK /
+    // A-B chips, like the reference's top-right panel. Hidden unless the
+    // body is in cockpit mode (CSS); the amber state chip steps aside.
+    this.ckptPanel = el('div', 'hud-panel hud-cockpit-state', root);
+    this.ckptBars = {};
+    for (const [key, label, color] of [['FUEL', 'FUEL', '#35b8c8'], ['HULL', 'HULL', '#3ddc84']]) {
+      const row = el('div', 'hud-bar-row', this.ckptPanel);
+      el('span', 'hud-bar-label', row, label);
+      const bar = el('div', 'hud-bar', row);
+      const fill = el('div', 'hud-bar-fill', bar);
+      fill.style.background = color;
+      const val = el('span', 'hud-bar-val', row, '0%');
+      this.ckptBars[key] = { fill, val };
+    }
+    this.ckptChips = el('div', 'hud-gear-row', this.ckptPanel);
+    this.ckptChipEls = {};
+    for (const key of ['GEAR', 'FLAP', 'BRK', 'A/B']) {
+      this.ckptChipEls[key] = el('span', 'hud-mini-chip', this.ckptChips, key);
+    }
+
     // storm panel (top-centre-right, hidden unless storm)
     this.stormPanel = el('div', 'hud-panel hud-storm', root);
     el('div', 'hud-storm-title', this.stormPanel, 'STORM FRONT');
@@ -63,7 +83,7 @@ export class HUD {
     this.bossBarFill = el('div', 'hud-boss-fill', this.bossBar);
     this.bossPct = el('div', 'hud-boss-pct', this.bossPanel, '100%');
     // v4: the ally giant fighting beside you — shown only in boss sorties
-    this.allyChip = el('div', 'hud-ally', this.bossPanel, 'ULTRA-1 · GUARDIAN OF LIGHT — BEAM STRIKE');
+    this.allyChip = el('div', 'hud-ally', this.bossPanel, 'ULTRA-1 · GUARDIAN OF LIGHT — ENERGY BLADE');
     this.bossPanel.style.display = 'none';
 
     // left: speed tape
@@ -176,18 +196,22 @@ export class HUD {
     x.strokeRect(1, 1, W - 2, H - 2);
     const span = 90; // degrees visible
     const pxPerDeg = W / span;
+    // rev: in cockpit mode the strip labels every 10° (329 339 349 359 …),
+    // like the reference's compass; elsewhere it keeps N/E/S/W + 30° marks.
+    const cockpit = document.body.classList.contains('cockpit-mode');
     x.font = 'bold 12px monospace'; x.textAlign = 'center';
     const start = Math.floor((hdgDeg - span / 2) / 10) * 10;
     for (let d = start; d <= hdgDeg + span / 2; d += 10) {
       const dd = ((d % 360) + 360) % 360;
       let dx = (d - hdgDeg) * pxPerDeg + W / 2;
       if (dx < 0 || dx > W) continue;
-      const major = dd % 30 === 0;
+      const major = cockpit || dd % 30 === 0;
       x.strokeStyle = major ? '#ffd98a' : 'rgba(255,220,140,0.5)';
       x.lineWidth = major ? 2 : 1;
       x.beginPath(); x.moveTo(dx, H - 8); x.lineTo(dx, H - (major ? 24 : 16)); x.stroke();
-      if (major) {
-        const label = dd === 0 ? 'N' : dd === 90 ? 'E' : dd === 180 ? 'S' : dd === 270 ? 'W' : String(dd).padStart(3, '0');
+      if (major && dx > 14 && dx < W - 14) {
+        const label = cockpit ? String(dd).padStart(3, '0')
+          : dd === 0 ? 'N' : dd === 90 ? 'E' : dd === 180 ? 'S' : dd === 270 ? 'W' : String(dd).padStart(3, '0');
         x.fillStyle = '#ffd98a'; x.fillText(label, dx, 16);
       }
     }
@@ -357,6 +381,22 @@ export class HUD {
     setBar('THR', flight.throttle * 100, flight.afterburner ? '#7ab8ff' : '#ffd76a');
     setBar('FUEL', flight.fuel, flight.fuel < 20 ? '#ff5040' : '#ffb020');
     setBar('HULL', flight.hull, flight.hull < 50 ? '#ff5040' : '#3ddc84');
+
+    // rev: cockpit-mode top-right panel (FUEL / HULL bars + GEAR / FLAP /
+    // BRK / A-B chips, like the reference). Updated every frame; the
+    // panel itself only shows in cockpit mode (CSS).
+    const setCk = (key, pct, color) => {
+      this.ckptBars[key].fill.style.width = `${clamp(pct, 0, 100)}%`;
+      this.ckptBars[key].fill.style.background = color;
+      this.ckptBars[key].val.textContent = `${Math.round(pct)}%`;
+    };
+    setCk('FUEL', flight.fuel, flight.fuel < 20 ? '#ff5040' : '#35b8c8');
+    setCk('HULL', flight.hull, flight.hull < 50 ? '#ff5040' : '#3ddc84');
+    const ck = this.ckptChipEls;
+    ck.GEAR.className = 'hud-mini-chip ' + (flight.gear ? 'ok' : '');
+    ck.FLAP.className = 'hud-mini-chip ' + (flight.flaps ? 'ok' : '');
+    ck.BRK.className = 'hud-mini-chip ' + (flight.landed ? 'warn' : '');
+    ck['A/B'].className = 'hud-mini-chip ' + (flight.afterburner ? 'warn' : '');
     this.gearChip.textContent = flight.gear ? 'GEAR DOWN' : 'GEAR UP';
     this.gearChip.className = 'hud-mini-chip ' + (flight.gear ? 'ok' : '');
     this.flapChip.textContent = `FLP ${flight.flaps * 15}°`;

@@ -13,6 +13,7 @@ export const WORLD = {
 export const SUN = {
   golden: { x: -0.42, y: 0.32, z: -0.88 },   // low, ahead-left, over the peaks — high enough to clear the ridge (was y 0.20: the disc sat half-hidden behind the peaks)
   day:    { x: -0.35, y: 0.35, z: -0.75 },   // v4: bright-day sun, north-west — low enough that the disc sits in the cover frame (~23 deg elevation), lights the jet and the green terrain, glitter on the turquoise sea
+  dusk:   { x: 0.35, y: 0.22, z: -0.55 },   // rev: cockpit-shot dusk sun — low, ahead-right (~18 deg up, ~32 deg right), so the disc sits inside the frame at the upper right, like the round-canopy reference's sun at the right edge
   storm:  { x: -0.25, y: 0.12, z: -0.92 },
   night:  { x: 0.30,  y: 0.40, z: -0.55 },
 };
@@ -109,7 +110,7 @@ export const MISSIONS = [
   },
   {
     id: 7, name: 'KAIJU vs ULTRA', code: 'ULTRA', type: 'strike',
-    brief: 'ULTRA-1, the Guardian of Light, is fighting KAIJU-1 on the beach. Cover him — sink WARSHIP-1, then put missiles into the kaiju while the beam holds it.',
+    brief: 'ULTRA-1, the Guardian of Light, is fighting KAIJU-1 on the beach. Cover him — sink WARSHIP-1, then put missiles into the kaiju while the blade holds it.',
     par: '8:00', gates: 2, fuel: 69, weather: 'day', reward: 3000, targets: ['WARSHIP-1', 'KAIJU-1'],
   },
 ];

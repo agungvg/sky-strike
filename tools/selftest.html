@@ -12,6 +12,7 @@ import { Clouds } from '../game/src/clouds.js';
 import { Weather } from '../game/src/weather.js';
 import { Lightning } from '../game/src/lightning.js';
 import { buildJet } from '../game/src/jet.js';
+import { Cockpit } from '../game/src/cockpit.js';
 import { MISSIONS } from '../game/src/config.js';
 
 const lines = [];
@@ -241,10 +242,20 @@ try {
   missiles.reset(); missiles.setActive(['WARSHIP-1', 'KAIJU-1']);
   check('ultra visible in boss sortie', missiles.ultra.group.visible && missiles.ultraActive(), `visible=${missiles.ultra.group.visible} active=${missiles.ultraActive()}`);
   check('ultra beam aimed at kaiju', missiles.ultra.beam.visible, `beam=${missiles.ultra.beam.visible}`);
+  check('ultra energy blade present', !!missiles.ultra.group.userData.blade && missiles.ultra.group.userData.blade.visible, `blade=${!!missiles.ultra.group.userData.blade}`);
+  check('kaiju is mecha (metal hull + cyan jaw)', !!missiles.targetById('KAIJU-1').group.userData.mecha && !!missiles.targetById('KAIJU-1').group.userData.jawGlow, `mecha=${!!missiles.targetById('KAIJU-1').group.userData.mecha}`);
   missiles.reset(); missiles.setActive(null);
   check('ultra hidden outside boss sortie', !missiles.ultra.group.visible && !missiles.ultraActive(), `visible=${missiles.ultra.group.visible}`);
   sky.apply('day', 'day');
   check('day palette applies', sky.paletteName === 'day' && sky.palette.waterDeep === 0x0e6f8a, `palette=${sky.paletteName}`);
+
+  // 10. rev: the cockpit canopy is a ROUND arch (a big circle bow, not
+  // the flat/angular v4 frame) — the reference's defining feature.
+  const cpRoot = document.createElement('div');
+  new Cockpit(cpRoot);
+  const arch = cpRoot.querySelector('.canopy-arch');
+  const archD = arch ? arch.getAttribute('d') : '';
+  check('cockpit canopy arch is round (circle arc)', !!arch && /A 560,560 0 1 1/.test(archD) && archD.indexOf('M 97,720') === 0, `d=${archD}`);
   runner.start(7, flight);
   check('mission 7 KAIJU vs ULTRA starts', runner.mission && runner.mission.id === 7 && runner.killsNeeded === 2, `id=${runner.mission && runner.mission.id} killsNeeded=${runner.killsNeeded}`);
   const d7 = runner.debrief(flight);
