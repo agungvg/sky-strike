@@ -26,12 +26,20 @@ export class Cockpit {
     // inside the panel. Thick dark tube + a thin teal inner rim (the
     // reference's sunlit inner edge) + a faint outer rim. Slim dark side
     // rails only — no top band, no V nose line: the bow IS the frame.
+    // Ronde 3 (ref-cockpit-clouds: "pilarnya keliatan"): the bow is
+    // thicker (34) with a warm sunlit highlight across the crown, and
+    // each side gets an inner PILLAR rail (r 505) following the bow's
+    // curve from the panel up to y 180 — the canopy frame reads as
+    // pillars left + right, like the reference, not a lone thin arc.
     const frame = document.createElement('div');
     frame.className = 'cockpit-frame';
     frame.innerHTML = `<svg viewBox="0 0 1280 720" preserveAspectRatio="none">
       <path d="M0,0 L46,0 L30,720 L0,720 Z" fill="#14181f"/>
       <path d="M1280,0 L1234,0 L1250,720 L1280,720 Z" fill="#14181f"/>
-      <path class="canopy-arch" d="M 97,720 A 560,560 0 1 1 1183,720" fill="none" stroke="#10141a" stroke-width="30"/>
+      <path d="M 149,720 A 505,505 0 0 1 339,180" fill="none" stroke="#10141a" stroke-width="13"/>
+      <path d="M 1131,720 A 505,505 0 0 0 941,180" fill="none" stroke="#10141a" stroke-width="13"/>
+      <path class="canopy-arch" d="M 97,720 A 560,560 0 1 1 1183,720" fill="none" stroke="#10141a" stroke-width="34"/>
+      <path d="M 255,200 A 545,545 0 0 1 1025,200" fill="none" stroke="rgba(255,244,214,0.30)" stroke-width="5"/>
       <path d="M 81,720 A 575,575 0 1 1 1199,720" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="3"/>
       <path d="M 121,720 A 536,536 0 1 1 1159,720" fill="none" stroke="rgba(120,220,190,0.38)" stroke-width="4"/>
     </svg>`;
@@ -51,6 +59,31 @@ export class Cockpit {
     this.hudGlass.height = 720;
     root.appendChild(this.hudGlass);
 
+    // Ronde 3 (ref-cockpit-clouds): the CENTRE PILLAR — the HUD combiner
+    // frame standing in the middle of the windscreen, like the reference:
+    // two slim vertical posts + a top crossbar, landing on the panel,
+    // with a faint combiner glass between them. It sits ABOVE the HUD
+    // canvas (a physical frame occludes the projected symbology), but
+    // the posts (x 600-612 / 668-680) pass through the RECON ring's
+    // interior without crossing the ring itself, so the ring, the
+    // 388 KT / 958 FT flanks and the RECON label all stay readable.
+    // (Fix after the first render: the crossbar sat at y 142 and clipped
+    // the bottom of the RECON glyphs — the frame top is now y 178, well
+    // below the label, and the posts start at y 185 so the ring's top
+    // arc passes above them.)
+    // Inline styles only — the cockpit CSS lives in index.html, which
+    // is outside this round's file boundary.
+    this.hudFrame = document.createElement('div');
+    this.hudFrame.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
+    this.hudFrame.innerHTML = `<svg viewBox="0 0 1280 720" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+      <rect x="600" y="185" width="12" height="285" fill="#10141a"/>
+      <rect x="668" y="185" width="12" height="285" fill="#10141a"/>
+      <rect x="594" y="178" width="92" height="10" fill="#10141a"/>
+      <rect x="596" y="180" width="88" height="3" fill="rgba(255,244,214,0.22)"/>
+      <rect x="606" y="188" width="68" height="278" fill="rgba(140,220,180,0.05)" stroke="rgba(140,220,180,0.28)" stroke-width="1"/>
+    </svg>`;
+    root.appendChild(this.hudFrame);
+
     // instrument panel (bottom of frame). Rev layout, like the reference's
     // three displays, left to right: TAC RADAR | 8 gauges (ADI centre) |
     // ENG / FUEL / SYS (bars over the throttle quadrant). Switches, lamps,
@@ -63,26 +96,39 @@ export class Cockpit {
     // reference — it is drawn as a circular TAC RADAR scope (see drawMfd).
     // Ronde 2: taller canvas (210) so the scope can grow and the text can
     // breathe — the panel is the reference's big bright display, not a
-    // strip of small dark screens.
+    // strip of small dark screens. Ronde 3: 224 tall, margin-top 38 (the
+    // lamp row moves up to 24) so the displays eat the dead band at the
+    // panel bottom; the button strip below covers only empty canvas.
     this.mfdCanvas = document.createElement('canvas');
     this.mfdCanvas.className = 'cockpit-mfd';
     this.mfdCanvas.width = 260;
-    this.mfdCanvas.height = 210;
+    this.mfdCanvas.height = 224;
+    this.mfdCanvas.style.marginTop = '38px';
     this.panel.appendChild(this.mfdCanvas);
 
     // gauge canvas: 8 gauges (ronde 2: 740 wide, r 56, taller 210 — the
     // strip is bigger and brighter; see draw() for the layout).
+    // Ronde 3: 224 tall like the MFD, so the whole strip reads as one
+    // lit display unit instead of dark circles on a black slab.
     this.gaugeCanvas = document.createElement('canvas');
     this.gaugeCanvas.className = 'cockpit-gauges';
     this.gaugeCanvas.width = 740;
-    this.gaugeCanvas.height = 210;
+    this.gaugeCanvas.height = 224;
+    this.gaugeCanvas.style.marginTop = '38px';
     this.panel.appendChild(this.gaugeCanvas);
 
     // rev: ENG / FUEL / SYS — the reference's right display: THR / FUEL /
     // HULL bars over the throttle quadrant (the quadrant lives inside this
     // panel now, levers shortened so the status chips below still clear).
+    // Ronde 3: a GREEN-SCREEN display like the reference's right MFD —
+    // green-tinted face + green border + glow — so it reads as a lit
+    // screen, not a dark box. (Inline styles: index.html is out of bounds.)
     this.engPanel = document.createElement('div');
     this.engPanel.className = 'cockpit-eng';
+    this.engPanel.style.marginTop = '38px';
+    this.engPanel.style.background = '#0a1a12';
+    this.engPanel.style.border = '1px solid #2a7a4a';
+    this.engPanel.style.boxShadow = '0 0 16px rgba(75,232,138,0.28)';
     this.engPanel.innerHTML = `
       <div class="eng-title">ENG / FUEL / SYS</div>
       <div class="eng-row"><span class="eng-label">THR</span><div class="eng-bar"><div class="eng-fill" id="eng-thr"></div></div><span class="eng-val" id="eng-thr-v">0%</span></div>
@@ -125,8 +171,10 @@ export class Cockpit {
     this.panel.appendChild(this.switchRow);
 
     // v4: warning lamp strip — WARN / FIRE / HYD / ELEC / OXY / GEAR
+    // (ronde 3: top 24 so it clears the displays' new 38px margin-top)
     this.lampRow = document.createElement('div');
     this.lampRow.className = 'cockpit-lamps';
+    this.lampRow.style.top = '24px';
     this.lamps = {};
     for (const [key, label, cls] of [
       ['WARN', 'WARN', 'amber'], ['FIRE', 'FIRE', 'red'], ['HYD', 'HYD', 'green'],
@@ -140,11 +188,26 @@ export class Cockpit {
     }
     this.panel.appendChild(this.lampRow);
 
-    // v4: engraved placard on the panel
-    const placard = document.createElement('div');
-    placard.className = 'cockpit-placard';
-    placard.textContent = 'FALCON-7 · SN 07 · PILOT LYSO — "SKY STRIKE"';
-    this.panel.appendChild(placard);
+    // Ronde 3 (ref-cockpit-clouds: "bawahnya jangan kotak"): the panel
+    // bottom was a flat dark slab with only the placard line on it. It
+    // is now a DENSE BUTTON STRIP — the reference's rows of small
+    // labelled keys under the screens — spanning left + centre (the
+    // status chips keep the right corner). The placard text survives
+    // as the strip's leading label.
+    const btnStrip = document.createElement('div');
+    btnStrip.style.cssText = 'position:absolute;bottom:3px;left:14px;right:250px;height:24px;display:flex;gap:4px;align-items:center;';
+    const stripLabel = document.createElement('span');
+    stripLabel.textContent = 'FALCON-7 · SN 07';
+    stripLabel.style.cssText = 'font-size:9px;letter-spacing:1px;color:#5a6472;margin-right:6px;white-space:nowrap;';
+    btnStrip.appendChild(stripLabel);
+    const litIdx = new Set([1, 4, 6, 11, 15]);
+    ['NAV', 'COM', 'IFF', 'TAC', 'RDR', 'FLR', 'GEAR', 'BRK', 'OXY', 'HYD', 'ELEC', 'FUEL', 'ENG', 'AP', 'ALT', 'HDG', 'WPN', 'MSL', 'CHF', 'FLR2'].forEach((lab, i) => {
+      const b = document.createElement('span');
+      b.textContent = lab;
+      b.style.cssText = `flex:1;min-width:0;text-align:center;font-size:8px;font-weight:bold;letter-spacing:0.5px;color:${litIdx.has(i) ? '#4be88a' : '#8a94a2'};background:${litIdx.has(i) ? 'rgba(75,232,138,0.10)' : '#171c24'};border:1px solid ${litIdx.has(i) ? '#2a7a4a' : '#2e3642'};border-radius:2px;padding:4px 0;white-space:nowrap;overflow:hidden;`;
+      btnStrip.appendChild(b);
+    });
+    this.panel.appendChild(btnStrip);
 
     // yoke (SVG silhouette, bottom centre)
     const yoke = document.createElement('div');
@@ -231,10 +294,23 @@ export class Cockpit {
     const x = this.gaugeCanvas.getContext('2d');
     const W = this.gaugeCanvas.width, H = this.gaugeCanvas.height;
     x.clearRect(0, 0, W, H);
+    // Ronde 3: a LIT display backing, so the whole strip reads as one
+    // bright instrument panel (like the reference's centre display),
+    // not 8 dark circles floating on a black slab.
+    const bg = x.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#181f2b');
+    bg.addColorStop(1, '#0d1219');
+    x.fillStyle = bg; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(255,255,255,0.05)'; x.lineWidth = 1;
+    for (let gy = 24; gy < H; gy += 24) {
+      x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke();
+    }
+    x.strokeStyle = 'rgba(126,232,255,0.35)'; x.lineWidth = 1;
+    x.strokeRect(0.5, 0.5, W - 1, H - 1);
     // ronde 2: bigger gauges (r 56, canvas 740x210) — the strip is the
     // reference's bright middle display, not a row of small dark dials.
     const r = 56;
-    const y0 = 100;
+    const y0 = 106;
     const xs = [42, 133, 224, 315, 406, 497, 588, 679];
 
     // rev: the centre display is the ADI / HORIZON — header over the
@@ -389,17 +465,22 @@ export class Cockpit {
   // Same tactical content as the v4 MFD (live targets + ally + list).
   drawMfd(flight, targets, lk, ultraOn) {
     const x = this.mfdCanvas.getContext('2d');
-    const W = 260, H = 210;
+    const W = 260, H = 224;
     x.clearRect(0, 0, W, H);
-    x.fillStyle = '#071410'; x.fillRect(0, 0, W, H);
+    // Ronde 3: a lit green-screen face (was near-black #071410) — the
+    // reference's left MFD is a bright green display, not a dark hole.
+    const bg = x.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0d2417');
+    bg.addColorStop(1, '#071410');
+    x.fillStyle = bg; x.fillRect(0, 0, W, H);
     x.strokeStyle = '#2a7a4a'; x.lineWidth = 2; x.strokeRect(1, 1, W - 2, H - 2);
     x.font = 'bold 13px monospace'; x.textAlign = 'left';
     x.fillStyle = '#4be88a'; x.fillText('TAC RADAR · 4 KM', 8, 18);
     x.fillStyle = '#8ef0ff'; x.textAlign = 'right'; x.fillText('RNG 4KM', W - 8, 18);
-    const cx = W / 2, cy = 110, R = 70;
+    const cx = W / 2, cy = 116, R = 74;
     // scope face
     x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2);
-    x.fillStyle = '#04120a'; x.fill();
+    x.fillStyle = '#0c2a18'; x.fill();
     // range rings + crosshair
     x.strokeStyle = 'rgba(61,220,132,0.4)'; x.lineWidth = 1;
     for (const r of [R / 3, (2 * R) / 3]) {

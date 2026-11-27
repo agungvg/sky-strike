@@ -14,7 +14,8 @@
 import * as THREE from 'three';
 import { KT } from './flight.js';
 import { KAIJU_CHEST_LOCAL } from './kaiju.js';
-import { makeNoise } from './random.js';
+import { makeNoise, mulberry32 } from './random.js';
+import { groundHeight } from './terrain.js';
 import { SEED } from './config.js';
 
 // Place the plane and freeze the flight state for a shot.
@@ -59,6 +60,29 @@ function duskLook(game) {
   game.lightning.auto = false;
 }
 
+// Ronde 3 (cockpit, ref-cockpit-round): BLUE-GREY DUSK SKY, shot-2
+// only. duskLook's golden palette turns the whole top of the frame RED
+// (orange horizon + pink mid + violet zenith + orange fog), but the
+// reference sky is blue-grey dusk with only a pale warm glow at the sun.
+// Override the dome uniforms, fog, key, hemi and cloud tint AFTER
+// duskLook, so the sun stays ahead-right low (the reference's sun at the
+// right edge) while the sky itself reads slate blue-grey. Called only
+// from the cockpit shot.
+function cockpitDuskSky(game) {
+  const u = game.sky.uniforms;
+  u.uZenith.value.setHex(0x54627a);   // slate blue-grey zenith
+  u.uMid.value.setHex(0x93a3b8);      // pale blue-grey mid band
+  u.uHorizon.value.setHex(0xcdbca6);  // pale warm taupe at the horizon (sun glow only)
+  u.uSunColor.value.setHex(0xffe6bb); // paler sun halo
+  u.uSunCore.value.setHex(0xfff9e2);
+  if (game.scene.fog) game.scene.fog.color.setHex(0x9fb0c4); // blue-grey fog, not orange
+  game.sky.key.color.setHex(0xfff3e0); // near-neutral pale key: snow reads white, not tan
+  game.sky.hemi.color.setHex(0x9db4d8);
+  game.sky.hemi.groundColor.setHex(0x707880);
+  game.sky.hemi.intensity = 0.95;
+  game.clouds.tint(0xe9eff5, 0xbcc9d8); // pale blue-grey clouds, not warm
+}
+
 // Ronde 2 (cockpit, ref-cockpit-round): SNOWY CANYON, shot-2 only. The
 // reference is a snow canyon — white walls left/right, dusk sky — but the
 // shared terrain's snowLine (900 m) leaves the canyon walls brown rock,
@@ -70,26 +94,54 @@ function duskLook(game) {
 // Pines are hidden for this frame only (no treeline in a snow canyon);
 // the instanced meshes are found by radial segments — canopy cones (7)
 // and trunks (5) — village roofs (4) and all other meshes are untouched.
-function snowCanyon(game) {
+// Ronde 3: the valley floor (y <= 170) inside the canyon corridor is
+// ALSO recolored — snow white with blue-grey rock patches and darker
+// streaks, plus small fbm bumps so it reads as snowfield + rock, not a
+// flat mauve wedge — and every band is tinted BLUE, because the warm
+// dusk key turns neutral grey TAN (ronde 2's left wall). The bumps are
+// deterministic per (x, z), so duplicated (non-indexed) vertices move
+// together and the mesh never cracks; the sim is frozen in shot mode,
+// so the visual mesh may differ a few metres from groundHeight().
+function snowCanyon(game, gate) {
   const mesh = game.terrain.mesh;
   const pos = mesh.geometry.attributes.position;
   const col = mesh.geometry.attributes.color;
   const c = new THREE.Color();
+  const fbmF = makeNoise(SEED + 13); // corridor-floor patch + bump noise
+  const corridor = (x, z) => Math.abs(x - gate.x) < 450 && z > gate.z - 900 && z < gate.z + 500;
   for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i);
-    if (y <= 170) continue;
+    const x = pos.getX(i), y0 = pos.getY(i), z = pos.getZ(i);
+    // Ronde 3: valley floor inside the corridor — snow white with
+    // blue-grey rock patches + darker streaks, and small fbm bumps
+    // (deterministic per (x, z), so the non-indexed mesh never cracks).
+    if (y0 <= 170) {
+      if (!corridor(x, z)) continue;
+      const n = fbmF(x * 0.02, z * 0.02, 3); // -1..1
+      const t = Math.max(0, Math.min(1, (n - 0.1) / 0.5)); // 0 snow -> 1 rock
+      const streak = 0.92 + 0.08 * (0.5 + 0.5 * Math.sin(z * 0.05 + x * 0.01));
+      c.setRGB(
+        (0.88 + (0.40 - 0.88) * t) * streak,
+        (0.91 + (0.43 - 0.91) * t) * streak,
+        (0.99 + (0.55 - 0.99) * t) * streak,
+      );
+      col.setXYZ(i, c.r, c.g, c.b);
+      pos.setY(i, y0 + fbmF(x * 0.015, z * 0.015, 2) * 5);
+      continue;
+    }
     // baked jitter + height/x striation bands, so the walls read as
     // rock strata under snow, not flat pink (first pass washed out to a
     // featureless salmon under the dusk key + fog). Snow is tinted
     // slightly blue so the warm key reads white; mid slopes go darker
-    // grey for contrast.
-    const stripe = 0.80 + 0.20 * (0.5 + 0.5 * Math.sin(y * 0.06 + x * 0.008));
+    // grey for contrast. Ronde 3: every band is tinted BLUE — neutral
+    // grey under the warm key read TAN on the left wall.
+    const stripe = 0.80 + 0.20 * (0.5 + 0.5 * Math.sin(y0 * 0.06 + x * 0.008));
     const j = (0.88 + ((col.getX(i) + col.getY(i) * 0.7) % 0.12)) * stripe;
-    if (y > 320) c.setRGB(0.88 * j, 0.90 * j, 0.98 * j);
-    else c.setRGB(0.58 * j, 0.57 * j, 0.62 * j);
+    if (y0 > 320) c.setRGB(0.86 * j, 0.90 * j, 1.00 * j);
+    else c.setRGB(0.55 * j, 0.58 * j, 0.68 * j);
     col.setXYZ(i, c.r, c.g, c.b);
   }
   col.needsUpdate = true;
+  pos.needsUpdate = true;
   // halve the dusk fog for this frame only: the golden fog was washing
   // the far ridge into pink soup at 1.5 km; the canyon needs its strata.
   if (game.scene.fog) game.scene.fog.density = 0.00022;
@@ -136,14 +188,16 @@ function canyonWalls(game, gate) {
       // 0.62-grey strata TAN and the shadowed wall near-black. Snow now
       // starts at 460 m (more of the visible wall is white), strata are
       // 0.80-based, base 0.58-based — the reference's walls are WHITE
-      // snow + blue-grey rock, not brown.
-      if (y > 420) c.setRGB(0.92, 0.93, 0.97); // snow cap
+      // snow + blue-grey rock, not brown. Ronde 3: every band is tinted
+      // BLUE (B > R), because neutral grey under the warm key reads TAN
+      // on the sunlit west wall; base lifted 0.58 -> 0.62.
+      if (y > 420) c.setRGB(0.86, 0.90, 1.00); // snow cap
       else if (y > 380) { // mixed snow/rock strata
         const s = 0.80 + 0.18 * band;
-        c.setRGB(s, s, s * 1.04);
+        c.setRGB(s * 0.86, s * 0.90, s * 1.04);
       } else { // dark rock base with striations
-        const s = (0.58 + 0.18 * band) * (0.75 + 0.25 * crack);
-        c.setRGB(s, s, s * 1.08);
+        const s = (0.62 + 0.18 * band) * (0.75 + 0.25 * crack);
+        c.setRGB(s * 0.82, s * 0.86, s * 1.06);
       }
       colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
     }
@@ -154,6 +208,55 @@ function canyonWalls(game, gate) {
   };
   mkWall(gate.x - 160, SEED + 31, false); // west wall, faces east (+x), sunlit
   mkWall(gate.x + 160, SEED + 47, true);  // east wall, faces west (-x), shadowed
+}
+
+// Ronde 3: CANYON FLOOR, shot-2 only (backdrop props, like canyonWalls).
+// The recolored + bumped valley floor still reads flat from 200 m up,
+// so the corridor gets real relief: snow-dusted boulders (white tops,
+// blue-grey sides, flat-shaded) scattered along the flight path, plus
+// low snow drifts. Positions are seeded (deterministic), sit on
+// groundHeight PLUS the same fbm bump snowCanyon applied to the mesh
+// (same seed, same call), and keep the centre 30 m clear so the gate
+// sightline stays clean. Shot-only; gameplay never sees them.
+function canyonFloor(game, gate) {
+  const rand = mulberry32(SEED + 99);
+  const fbmF = makeNoise(SEED + 13);
+  const bump = (x, z) => fbmF(x * 0.015, z * 0.015, 2) * 5;
+  const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 });
+  const snowMat = new THREE.MeshStandardMaterial({ color: 0xe8edf5, flatShading: true, roughness: 0.9, metalness: 0 });
+  for (let i = 0; i < 26; i++) {
+    const x = gate.x + (rand() * 2 - 1) * 260;
+    if (Math.abs(x - gate.x) < 30) continue; // keep the sightline clear
+    const z = gate.z - 750 + rand() * 900;
+    const r = 5 + rand() * 13;
+    const geo = new THREE.IcosahedronGeometry(r, 0);
+    const p = geo.attributes.position;
+    const colors = new Float32Array(p.count * 3);
+    const cc = new THREE.Color();
+    for (let v = 0; v < p.count; v++) {
+      const ly = p.getY(v) / r;
+      if (ly > 0.3) cc.setRGB(0.90, 0.93, 1.0);       // snow top
+      else if (ly > -0.4) cc.setRGB(0.55, 0.58, 0.68); // blue-grey side
+      else cc.setRGB(0.32, 0.35, 0.46);                // dark base
+      colors[v * 3] = cc.r; colors[v * 3 + 1] = cc.g; colors[v * 3 + 2] = cc.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const b = new THREE.Mesh(geo, rockMat);
+    b.position.set(x, groundHeight(x, z) + bump(x, z) + r * 0.15, z);
+    b.rotation.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI);
+    b.scale.set(0.8 + rand() * 0.6, 0.55 + rand() * 0.45, 0.8 + rand() * 0.6);
+    b.castShadow = true; b.receiveShadow = true;
+    game.scene.add(b);
+  }
+  for (let i = 0; i < 12; i++) {
+    const x = gate.x + (rand() * 2 - 1) * 300;
+    const z = gate.z - 700 + rand() * 850;
+    const d = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 8), snowMat);
+    d.scale.set(18 + rand() * 20, 3 + rand() * 3, 12 + rand() * 10);
+    d.position.set(x, groundHeight(x, z) + bump(x, z) + 0.5, z);
+    d.receiveShadow = true;
+    game.scene.add(d);
+  }
 }
 
 // Storm-night look for the battle shot only (reference: dark storm sky,
@@ -251,23 +354,22 @@ export const SHOTS = {
   cockpit(game) {
     game.setMission(1, { silent: true });
     duskLook(game);
-    snowCanyon(game); // ronde 2: white canyon walls, no pines — shot 2 only
+    cockpitDuskSky(game); // ronde 3: blue-grey dusk sky, not red
     // gate G-06 (index 5) is the ring in the windscreen: the plane sits
     // 160 m south of it, 20 m below its centre, so the ring reads big
     // (~250 px) and centred under the bow, FPV low inside it. G-06, not
     // G-05: this far up the canyon the plane is above the near slope, so
     // the snowy north ridge — not the brown hillside — fills the glass.
     const gate = game.runner.gates[5].pos;
+    snowCanyon(game, gate); // ronde 2+3: white canyon walls, no pines — shot 2 only
     canyonWalls(game, gate); // ronde 2: slot-canyon walls flanking the path
+    canyonFloor(game, gate); // ronde 3: boulders + drifts on the valley floor
     // cool fill from the west: lifts the shadowed east wall out of
     // near-black into blue-grey (the key comes from the north-east, so
     // the east face gets no key at all). Same pattern as stormLook's fill.
     const fill = new THREE.DirectionalLight(0xaec6e8, 0.8);
     fill.position.set(-1500, 700, -800);
     game.scene.add(fill);
-    // paler key for this frame only: the saturated orange key turned the
-    // sunlit wall TAN; a paler warm key lets the white snow read white.
-    game.sky.key.color.setHex(0xffe0b8);
     pose(game, {
       x: gate.x, y: gate.y - 20, z: gate.z + 160, headingDeg: 359, pitchDeg: 0, rollDeg: 0,
       speedKt: 388, throttle: 0.86, fuel: 68, score: 2150, gates: 5, flaps: 0,
