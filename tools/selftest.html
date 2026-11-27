@@ -1,0 +1,261 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports": {"three": "../game/vendor/three.module.min.js"}}</script></head>
+<body><pre id="out">RUNNING</pre>
+<script type="module">
+import * as THREE from 'three';
+import { Flight, KT } from '../game/src/flight.js';
+import { MissionRunner } from '../game/src/missions.js';
+import { MissileSystem } from '../game/src/missiles.js';
+import { Terrain, groundHeight } from '../game/src/terrain.js';
+import { Sky } from '../game/src/sky.js';
+import { Clouds } from '../game/src/clouds.js';
+import { Weather } from '../game/src/weather.js';
+import { Lightning } from '../game/src/lightning.js';
+import { buildJet } from '../game/src/jet.js';
+import { MISSIONS } from '../game/src/config.js';
+
+const lines = [];
+const log = (s) => { lines.push(s); };
+const results = [];
+function check(name, ok, detail = '') { results.push({ name, ok, detail }); log(`${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`); }
+
+try {
+  const renderer = new THREE.WebGLRenderer();
+  const scene = new THREE.Scene();
+  const sky = new Sky(scene, renderer);
+  const terrain = new Terrain(scene);
+  sky.bindWater(terrain.waterMat);
+  const clouds = new Clouds(scene);
+  const weather = new Weather(scene);
+  const lightning = new Lightning(scene);
+  const jet = buildJet();
+  scene.add(jet.group);
+  const flight = new Flight();
+  const runner = new MissionRunner(scene);
+  const missiles = new MissileSystem(scene);
+  const events = [];
+
+  // 1. terrain sanity: coastal plain ~46, peaks high, sea low, runway pad 42
+  const hPlain = groundHeight(300, 0), hPeak = groundHeight(-1000, -1800), hSea = groundHeight(0, 1800), hRwy = groundHeight(150, 350);
+  check('terrain plain ~46m', hPlain > 25 && hPlain < 110, `h=${hPlain.toFixed(1)}`);
+  check('terrain peaks >700m', hPeak > 700, `h=${hPeak.toFixed(1)}`);
+  check('terrain sea ~1m', hSea < 8, `h=${hSea.toFixed(1)}`);
+  check('terrain runway pad 42m', Math.abs(hRwy - 42) < 1, `h=${hRwy.toFixed(1)}`);
+
+  // 2. gate run: autopilot mission 1, 150 sim-seconds, must clear >= 3 gates, no crash
+  runner.start(1, flight);
+  missiles.reset(); missiles.setActive(null);
+  flight.reset();
+  flight.pos.set(150, 260, 1600); flight.heading = 0; flight.speed = 140 * KT; flight.throttle = 0.3;
+  const dt = 1 / 60;
+  let crashed = false;
+  for (let i = 0; i < 150 * 60 && !flight.crashed && !runner.isComplete(flight); i++) {
+    const g = runner.nextGatePos();
+    let roll = 0, pitch = 0;
+    if (g) {
+      // PURE PURSUIT: aim at a point ahead on the route segment (or at
+      // the gate itself once close), and slow down when the turn is big
+      // so a jet at 80+ m/s can actually make the bend.
+      const prev = flight.gatesCleared === 0 ? new THREE.Vector3(150, 260, 1600)
+        : runner.gates[flight.gatesCleared - 1].pos;
+      const segX = g.x - prev.x, segZ = g.z - prev.z;
+      const segLen = Math.hypot(segX, segZ);
+      const ux = segX / segLen, uz = segZ / segLen;
+      const rx = flight.pos.x - prev.x, rz = flight.pos.z - prev.z;
+      const s = rx * ux + rz * uz; // along-track distance
+      const look = Math.max(120, flight.speed * 1.5);
+      let tx, tz;
+      if (s + look >= segLen) { tx = g.x + ux * 150; tz = g.z + uz * 150; } // aim PAST the gate: fly through it, never orbit it
+      else { tx = prev.x + ux * (s + look); tz = prev.z + uz * (s + look); }
+      const wantHdg = Math.atan2(tx - flight.pos.x, -(tz - flight.pos.z));
+      let err = wantHdg - flight.heading;
+      while (err > Math.PI) err -= Math.PI * 2;
+      while (err < -Math.PI) err += Math.PI * 2;
+      flight.throttle = Math.abs(err) > 0.6 ? 0.18 : 0.3; // slow for big turns
+      const wantBank = Math.abs(err) < 0.02 ? 0 : Math.max(-1.15, Math.min(1.15, err * 1.5));
+      roll = Math.max(-1, Math.min(1, (wantBank - flight.roll) * 4));
+      const wantAlt = g.y;
+      const wantPitch = Math.max(-0.4, Math.min(0.4, (wantAlt - flight.pos.y) / 90 - flight.vsi * 0.02));
+      pitch = Math.max(-1, Math.min(1, (wantPitch - flight.pitch) * 4));
+    }
+    flight.step(dt, { roll, pitch, throttleDelta: 0 }, { windKt: 5 });
+    runner.update(dt, flight, events);
+    if (i % 300 === 0) log(`  gate-run t=${(i / 60).toFixed(0)}s pos=(${flight.pos.x.toFixed(0)},${flight.pos.y.toFixed(0)},${flight.pos.z.toFixed(0)}) spd=${flight.speedKt.toFixed(0)}kt pitch=${(flight.pitch * 57.3).toFixed(1)}deg gates=${flight.gatesCleared} next=${runner.nextGatePos() ? `(${runner.nextGatePos().x.toFixed(0)},${runner.nextGatePos().y.toFixed(0)},${runner.nextGatePos().z.toFixed(0)})` : 'none'}`);
+    if (flight.crashed) crashed = true;
+  }
+  check('gate run clears >=3 gates', flight.gatesCleared >= 3, `cleared=${flight.gatesCleared} score=${flight.score} crashed=${crashed}`);
+  check('gate run no crash in 150s', !crashed, `reason=${flight.crashReason}`);
+  check('fuel burns', flight.fuel < 74, `fuel=${flight.fuel.toFixed(1)}`);
+
+  // 3. landing: mission 2, descend on the 6-degree path, must land with a graded debrief
+  runner.start(2, flight);
+  missiles.reset(); missiles.setActive(null);
+  flight.reset();
+  flight.pos.set(150, 163, 1950); flight.heading = 0; flight.speed = 130 * KT;
+  flight.throttle = 0.42; flight.flaps = 2; flight.gear = true; flight.fuel = 61;
+  let landed = false;
+  const trace = [];
+  for (let i = 0; i < 120 * 60 && !flight.crashed && !flight.landed; i++) {
+    const g = runner.nextGatePos();
+    const target = g || { x: 150, y: 42, z: -100 };
+    const dx = target.x - flight.pos.x, dz = target.z - flight.pos.z;
+    const wantHdg = Math.atan2(dx, -dz);
+    let err = wantHdg - flight.heading;
+    while (err > Math.PI) err -= Math.PI * 2;
+    while (err < -Math.PI) err += Math.PI * 2;
+    let roll, pitch;
+    // glidepath tracking with feedforward: hold the 6-degree slope from
+    // wherever we are, then flare to -1.2 m/s in the last 8 m.
+    const dist = Math.hypot(flight.pos.x - 150, flight.pos.z - 800);
+    const wantAlt = 42 + dist * Math.tan(6 * Math.PI / 180);
+    let wantVs = -flight.speed * 0.105 + Math.max(-4, Math.min(4, (wantAlt - flight.pos.y) * 0.2));
+    wantVs = Math.max(-9, Math.min(3, wantVs));
+    if (flight.gatesCleared >= 2 && flight.pos.y - 42 < 8) wantVs = -1.2;
+    const wantPitch = Math.max(-0.35, Math.min(0.35, (wantVs - flight.vsi) * 0.06));
+    pitch = Math.max(-1, Math.min(1, (wantPitch - flight.pitch) * 4));
+    if (flight.gatesCleared >= 2) {
+      // on the strip: hold the centreline
+      const wantBank = Math.max(-0.25, Math.min(0.25, (150 - flight.pos.x) * 0.008 - Math.sin(flight.heading) * 0.4));
+      roll = Math.max(-1, Math.min(1, (wantBank - flight.roll) * 4));
+      flight.throttle = 0.35;
+    } else {
+      const wantBank = Math.abs(err) < 0.02 ? 0 : Math.max(-0.5, Math.min(0.5, err * 0.8));
+      roll = Math.max(-1, Math.min(1, (wantBank - flight.roll) * 4));
+    }
+    flight.throttle = Math.max(0.12, Math.min(0.25, flight.throttle + (flight.speedKt < 118 ? 0.002 : -0.002)));
+    flight.step(dt, { roll, pitch, throttleDelta: 0 }, { windKt: 5 });
+    runner.update(dt, flight, events);
+    if (i % 300 === 0) trace.push(`t=${(i / 60).toFixed(0)}s pos=(${flight.pos.x.toFixed(0)},${flight.pos.y.toFixed(0)},${flight.pos.z.toFixed(0)}) spd=${flight.speedKt.toFixed(0)}kt pitch=${(flight.pitch * 57.3).toFixed(1)}° gates=${flight.gatesCleared}`);
+    if (flight.landed) landed = true;
+  }
+  log('  landing trace: ' + trace.join(' | '));
+  check('landing mission lands', landed, `landed=${landed} crashed=${flight.crashed} reason=${flight.crashReason} sink=${flight.touchdownFpm} centre=${flight.centrelineM}m`);
+  if (landed) {
+    const d = runner.debrief(flight);
+    check('debrief grade sane', ['S', 'A', 'B', 'C'].includes(d.grade), `grade=${d.grade} score=${d.score} sink=${d.sink}`);
+  }
+
+  // 4. missile lock + fire + kill: mission 3, aim at WARSHIP-1, hold lock, fire
+  runner.start(3, flight);
+  missiles.reset(); missiles.setActive(['WARSHIP-1', 'WARSHIP-2']);
+  flight.reset();
+  const ship1 = missiles.targetById('WARSHIP-1');
+  flight.pos.set(-420, 320, 1980); flight.speed = 150 * KT; flight.throttle = 0.45;
+  // aim the nose at the ship and hold it there
+  let lockedAt = -1, firedAt = -1, killedAt = -1;
+  for (let i = 0; i < 30 * 60; i++) {
+    const toT = ship1.pos.clone().sub(flight.pos);
+    const wantHdg = Math.atan2(toT.x, -toT.z);
+    let err = wantHdg - flight.heading;
+    while (err > Math.PI) err -= Math.PI * 2;
+    while (err < -Math.PI) err += Math.PI * 2;
+    const wantBank = Math.max(-0.6, Math.min(0.6, err * 1.0));
+    const roll = Math.max(-1, Math.min(1, (wantBank - flight.roll) * 4));
+    const wantPitch = Math.max(-0.4, Math.min(0.4, Math.atan2(toT.y, Math.hypot(toT.x, toT.z)) * 1.2));
+    const pitch = Math.max(-1, Math.min(1, (wantPitch - flight.pitch) * 4));
+    flight.step(dt, { roll, pitch, throttleDelta: 0 }, { windKt: 5 });
+    missiles.update(dt, flight, events);
+    if (missiles.lock.locked && lockedAt < 0) { lockedAt = i; }
+    if (missiles.lock.locked && firedAt < 0) {
+      const st = missiles.fire(flight);
+      if (st === 'fired') firedAt = i;
+    }
+    if (!ship1.alive && killedAt < 0) { killedAt = i; }
+    if (killedAt >= 0) break;
+    if (flight.crashed) break;
+  }
+  check('lock builds on the ship', lockedAt >= 0, `lockedAt=${lockedAt >= 0 ? (lockedAt / 60).toFixed(1) + 's' : 'never'}`);
+  check('missile fires when locked', firedAt >= 0, `firedAt=${firedAt >= 0 ? (firedAt / 60).toFixed(1) + 's' : 'never'}`);
+  check('missile kills the ship', killedAt >= 0, `killedAt=${killedAt >= 0 ? (killedAt / 60).toFixed(1) + 's' : 'never'} alive=${ship1.alive}`);
+  check('kill event carries +1000', events.some((e) => e.type === 'kill' && e.points === 1000), `events=${events.filter((e) => e.type === 'kill').length}`);
+  check('fire without lock is refused', (() => {
+    missiles.reset(); missiles.setActive(['WARSHIP-2']);
+    flight.reset(); flight.pos.set(0, 420, 1600); flight.heading = Math.PI; // nose south, away from the ship
+    missiles.update(0.5, flight, events);
+    return missiles.fire(flight) === 'no-lock';
+  })(), '');
+
+  // 4b. kaiju boss: a missile hit damages (HP 100 -> 62) but does NOT kill
+  runner.start(3, flight);
+  missiles.reset(); missiles.setActive(['KAIJU-1']);
+  flight.reset();
+  const kaiju = missiles.targetById('KAIJU-1');
+  const killsBefore = missiles.kills;
+  const eventsBefore = events.length;
+  flight.pos.set(-350, 200, 1900); flight.speed = 150 * KT; flight.throttle = 0.45;
+  let hitAt = -1;
+  for (let i = 0; i < 30 * 60; i++) {
+    const toT = kaiju.pos.clone().sub(flight.pos);
+    const wantHdg = Math.atan2(toT.x, -toT.z);
+    let err = wantHdg - flight.heading;
+    while (err > Math.PI) err -= Math.PI * 2;
+    while (err < -Math.PI) err += Math.PI * 2;
+    const wantBank = Math.max(-0.6, Math.min(0.6, err * 1.0));
+    const roll = Math.max(-1, Math.min(1, (wantBank - flight.roll) * 4));
+    const wantPitch = Math.max(-0.4, Math.min(0.4, Math.atan2(toT.y, Math.hypot(toT.x, toT.z)) * 1.2));
+    const pitch = Math.max(-1, Math.min(1, (wantPitch - flight.pitch) * 4));
+    flight.step(dt, { roll, pitch, throttleDelta: 0 }, { windKt: 5 });
+    missiles.update(dt, flight, events);
+    if (missiles.lock.locked && !missiles.missiles.length) missiles.fire(flight);
+    if (kaiju.hp < 100 && hitAt < 0) { hitAt = i; }
+    if (hitAt >= 0) break;
+    if (flight.crashed) break;
+  }
+  check('kaiju hit damages boss (HP 62)', kaiju.hp === 62, `hp=${kaiju.hp} hitAt=${hitAt >= 0 ? (hitAt / 60).toFixed(1) + 's' : 'never'}`);
+  check('kaiju stays alive after one hit', kaiju.alive, `alive=${kaiju.alive}`);
+  check('kaiju hit scores no kill', missiles.kills === killsBefore && !events.slice(eventsBefore).some((e) => e.type === 'kill'), `kills=${missiles.kills}`);
+
+  // 5. storm mission: front timer counts down, lightning strikes, rain positions fill
+  runner.start(4, flight);
+  missiles.reset(); missiles.setActive(['WARSHIP-1']);
+  flight.reset();
+  weather.setStorm(true, 18, 2.5);
+  weather.update(0.016, 0, 400, 0);
+  const eta0 = runner.frontEtaSec;
+  runner.update(10, flight, events);
+  check('storm front counts down', runner.frontEtaSec < eta0, `eta ${eta0} -> ${runner.frontEtaSec.toFixed(1)}`);
+  lightning.strike(100, -500, 1100);
+  check('lightning strike creates bolt', !!lightning.active, '');
+  lightning.update(0.5);
+  check('lightning bolt expires', !lightning.active, '');
+  check('rain streaks positioned', weather.rainPos.some((v) => v !== 0), '');
+
+  // 6. over-G damages the hull (sustained hard bank + pull)
+  flight.reset();
+  const hull0 = flight.hull;
+  for (let i = 0; i < 10; i++) flight.step(0.5, { roll: 1, pitch: 1, throttleDelta: 0 }, { windKt: 5 });
+  check('over-G damages hull', flight.hull < hull0, `g=${flight.g.toFixed(2)} hull=${flight.hull.toFixed(1)}`);
+
+  // 7. afterburner: throttle past 92% lights the burner and tops 420 kt
+  flight.reset();
+  flight.throttle = 0.98;
+  for (let i = 0; i < 20; i++) flight.step(0.5, { roll: 0, pitch: 0, throttleDelta: 0 }, { windKt: 5 });
+  check('afterburner engages + exceeds cruise top', flight.afterburner && flight.speedKt > 420, `ab=${flight.afterburner} spd=${flight.speedKt.toFixed(0)}kt`);
+
+  // 8. all 7 missions build gates without error
+  let ok = true;
+  for (const m of MISSIONS) { try { runner.start(m.id, flight); } catch (e) { ok = false; log('mission ' + m.id + ' threw ' + e.message); } }
+  check('all 7 missions start', ok && runner.gates.length > 0, '');
+
+  // 9. v4: ULTRA-1 ally giant + bright-day palette
+  missiles.reset(); missiles.setActive(['WARSHIP-1', 'KAIJU-1']);
+  check('ultra visible in boss sortie', missiles.ultra.group.visible && missiles.ultraActive(), `visible=${missiles.ultra.group.visible} active=${missiles.ultraActive()}`);
+  check('ultra beam aimed at kaiju', missiles.ultra.beam.visible, `beam=${missiles.ultra.beam.visible}`);
+  missiles.reset(); missiles.setActive(null);
+  check('ultra hidden outside boss sortie', !missiles.ultra.group.visible && !missiles.ultraActive(), `visible=${missiles.ultra.group.visible}`);
+  sky.apply('day', 'day');
+  check('day palette applies', sky.paletteName === 'day' && sky.palette.waterDeep === 0x0e6f8a, `palette=${sky.paletteName}`);
+  runner.start(7, flight);
+  check('mission 7 KAIJU vs ULTRA starts', runner.mission && runner.mission.id === 7 && runner.killsNeeded === 2, `id=${runner.mission && runner.mission.id} killsNeeded=${runner.killsNeeded}`);
+  const d7 = runner.debrief(flight);
+  check('debrief breakdown sums to score', d7.breakdown && d7.breakdown.reduce((a, r) => a + r.pts, 0) === d7.score, `sum=${d7.breakdown && d7.breakdown.reduce((a, r) => a + r.pts, 0)} score=${d7.score}`);
+
+  const fails = results.filter((r) => !r.ok).length;
+  log(`\nSELFTEST ${fails === 0 ? 'ALL PASS' : fails + ' FAILURES'} (${results.length} checks)`);
+  document.getElementById('out').textContent = lines.join('\n');
+  window.__selftest = fails === 0 ? 'PASS' : 'FAIL';
+} catch (e) {
+  document.getElementById('out').textContent = 'SELFTEST ERROR: ' + e.message + '\n' + (e.stack || '');
+  window.__selftest = 'ERROR';
+}
+</script></body></html>
