@@ -37,8 +37,22 @@ function glowTexture(inner, outer) {
 
 export function buildUltra() {
   const g = new THREE.Group();
-  const silver = mat(0xbfc5cd, 0.45, 0.35, 0.07);
-  const silverDark = mat(0x878e99, 0.5, 0.3, 0.07);
+  const silver = mat(0x878e99, 0.65, 0.15, 0.0);
+  const silverDark = mat(0x5d646e, 0.65, 0.15, 0.0);
+  // RONDE 6b: kepala masih blob putih — silver 0x99a0aa di bawah key
+  // 3.4 + fill 1.7 tetap melewati bloom threshold di wajah datar
+  // kepala. Silver digelapkan lagi, roughness naik + metalness turun
+  // (kurang specular), halo mata dikecilkan lagi.
+  // RONDE 6: ULTRA-1 BLOWN-OUT PUTIH — torso + kepala jadi blob
+  // putih, detail hilang. Penyebabnya BUKAN satu emissive > 1.0,
+  // melainkan tumpukan: silver 0xbfc5cd (~75% grey) di bawah storm
+  // key 3.4 + fill 1.7 sudah melewati bloom threshold 1.0, lalu
+  // emissive 0.07 + env 0.15 + halo mata/timer/blade (additive,
+  // opacity 0.8-0.95) menumpuk jadi putih rata. Perbaikan: silver
+  // digelapkan satu tingkat (bayangan tetap abu-abu, bukan putih),
+  // emissive silver DIHAPUS (0.0 — fill storm sudah cukup
+  // meneranginya), dan semua halo additive dikecilkan + diredupkan.
+  // Red keeps 0.2 (warnanya gelap, tidak menyumbang blowout).
   // ITERASI 4: silver emissive 0.15 -> 0.07 — the iterasi-3 frame blew
   // the hero's head/shoulders out to FLAT WHITE (emissive + env 0.15
   // + storm key/fill + bloom, no shading left). 0.07 keeps the silver
@@ -93,9 +107,9 @@ export function buildUltra() {
   add(timerRing, 0, 24.5, 6.7);
   const timerGlow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: glowTexture('rgba(140,220,255,1)', 'rgba(40,140,255,0.7)'),
-    transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
+    transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false,
   }));
-  timerGlow.scale.set(8, 8, 1);
+  timerGlow.scale.set(5, 5, 1); // RONDE 6: 8 -> 5, opacity 0.9 -> 0.55 — halo timer ikut men-blob torso
   add(timerGlow, 0, 24.5, 7.2);
   g.userData.timerGlow = timerGlow;
 
@@ -142,9 +156,9 @@ export function buildUltra() {
     tip.position.set(0, 0, 16.2);
     const flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(190,230,255,1)', 'rgba(60,140,255,0.7)'),
-      transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
+      transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    flare.scale.set(7, 7, 1);
+    flare.scale.set(5, 5, 1); // RONDE 6: 7 -> 5, opacity 0.95 -> 0.7
     blade.add(core, halo, tip, flare);
     blade.position.set(side * 1.1, 24.8, 9.6);
     g.add(blade);
@@ -191,12 +205,15 @@ export function buildUltra() {
     add(eye, side * 1.35, 34.2, 2.3);
     const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(255,242,176,1)', 'rgba(255,200,60,0.6)'),
-      transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
+      transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     // ITERASI 4: 4.5 -> 3.4 — the iterasi-3 frame washed the hero's
     // whole head white; the big eye halos were part of it. Smaller
     // halos, eyes still glow.
-    eyeGlow.scale.set(3.4, 3.4, 1);
+    // RONDE 6: 3.4 -> 2.2, opacity 0.8 -> 0.5 — halo mata masih ikut
+    // men-blob kepala di bawah key 3.4 + bloom.
+    // RONDE 6b: 2.2 -> 1.6, opacity 0.5 -> 0.35 — kepala masih putih.
+    eyeGlow.scale.set(1.6, 1.6, 1);
     add(eyeGlow, side * 1.35, 34.2, 3.0);
   }
 
