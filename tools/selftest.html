@@ -14,6 +14,15 @@ import { Lightning } from '../game/src/lightning.js';
 import { buildJet } from '../game/src/jet.js';
 import { Cockpit } from '../game/src/cockpit.js';
 import { MISSIONS } from '../game/src/config.js';
+import { EffectComposer } from '../game/vendor/addons/postprocessing/EffectComposer.min.js';
+import { RenderPass } from '../game/vendor/addons/postprocessing/RenderPass.min.js';
+import { UnrealBloomPass } from '../game/vendor/addons/postprocessing/UnrealBloomPass.min.js';
+import { SMAAPass } from '../game/vendor/addons/postprocessing/SMAAPass.min.js';
+import { ShaderPass } from '../game/vendor/addons/postprocessing/ShaderPass.min.js';
+import { OutputPass } from '../game/vendor/addons/postprocessing/OutputPass.min.js';
+import { VignetteShader } from '../game/vendor/addons/shaders/VignetteShader.min.js';
+import { ColorCorrectionShader } from '../game/vendor/addons/shaders/ColorCorrectionShader.min.js';
+import { RoomEnvironment } from '../game/vendor/addons/environments/RoomEnvironment.min.js';
 
 const lines = [];
 const log = (s) => { lines.push(s); };
@@ -243,7 +252,7 @@ try {
   check('ultra visible in boss sortie', missiles.ultra.group.visible && missiles.ultraActive(), `visible=${missiles.ultra.group.visible} active=${missiles.ultraActive()}`);
   check('ultra beam aimed at kaiju', missiles.ultra.beam.visible, `beam=${missiles.ultra.beam.visible}`);
   check('ultra energy blade present', !!missiles.ultra.group.userData.blade && missiles.ultra.group.userData.blade.visible, `blade=${!!missiles.ultra.group.userData.blade}`);
-  check('kaiju is mecha (metal hull + cyan jaw)', !!missiles.targetById('KAIJU-1').group.userData.mecha && !!missiles.targetById('KAIJU-1').group.userData.jawGlow, `mecha=${!!missiles.targetById('KAIJU-1').group.userData.mecha}`);
+  check('kaiju is organic (hide + cyan jaw)', !!missiles.targetById('KAIJU-1').group.userData.organic && !!missiles.targetById('KAIJU-1').group.userData.jawGlow, `organic=${!!missiles.targetById('KAIJU-1').group.userData.organic}`);
   missiles.reset(); missiles.setActive(null);
   check('ultra hidden outside boss sortie', !missiles.ultra.group.visible && !missiles.ultraActive(), `visible=${missiles.ultra.group.visible}`);
   sky.apply('day', 'day');
@@ -256,10 +265,85 @@ try {
   const arch = cpRoot.querySelector('.canopy-arch');
   const archD = arch ? arch.getAttribute('d') : '';
   check('cockpit canopy arch is round (circle arc)', !!arch && /A 560,560 0 1 1/.test(archD) && archD.indexOf('M 97,720') === 0, `d=${archD}`);
+  // 10b. ronde 5: the instrument panel's top edge is an ARCH (centre
+  // higher than the sides), not a straight rectangle — the reference's
+  // sculpted tub. The SVG body path's top edge is sampled from
+  // panelArchY(): centre y ~4, sides ~56.
+  const panelBody = cpRoot.querySelector('.panel-arch-body');
+  const lip = cpRoot.querySelector('.panel-arch-lip');
+  let archOk = false, archDetail = '';
+  if (panelBody && lip) {
+    const pts = [...panelBody.getAttribute('d').matchAll(/L(\d+),(\d+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
+    const topPts = pts.filter(([, y]) => y < 200);
+    const minY = Math.min(...topPts.map(([, y]) => y));
+    const maxY = Math.max(...topPts.map(([, y]) => y));
+    const centre = topPts.reduce((a, [x, y]) => (Math.abs(x - 640) < Math.abs(a[0] - 640) ? [x, y] : a), [0, 999])[1];
+    archOk = minY < 10 && maxY > 40 && centre === minY;
+    archDetail = `centreY=${centre} minY=${minY} maxY=${maxY}`;
+  }
+  check('cockpit panel top edge is an arch (centre high, sides low)', archOk, archDetail);
   runner.start(7, flight);
   check('mission 7 KAIJU vs ULTRA starts', runner.mission && runner.mission.id === 7 && runner.killsNeeded === 2, `id=${runner.mission && runner.mission.id} killsNeeded=${runner.killsNeeded}`);
   const d7 = runner.debrief(flight);
   check('debrief breakdown sums to score', d7.breakdown && d7.breakdown.reduce((a, r) => a + r.pts, 0) === d7.score, `sum=${d7.breakdown && d7.breakdown.reduce((a, r) => a + r.pts, 0)} score=${d7.score}`);
+
+  // 11. render pipeline (v4): vendored r187 addons + composer chain +
+  // env map — same constants as game/src/main.js (single preset, mirrored
+  // here so a drift in either file fails loudly).
+  const pCam = new THREE.PerspectiveCamera(62, 16 / 9, 0.5, 14000);
+  pCam.position.set(0, 300, 1600);
+  const pComposer = new EffectComposer(renderer,
+    new THREE.WebGLRenderTarget(1280, 720, { type: THREE.HalfFloatType, samples: 4 }));
+  pComposer.setSize(1280, 720);
+  pComposer.addPass(new RenderPass(scene, pCam));
+  const pBloom = new UnrealBloomPass(new THREE.Vector2(1280, 720), 0.7, 0.5, 1.0);
+  pComposer.addPass(pBloom);
+  const pGrade = new ShaderPass(ColorCorrectionShader);
+  pGrade.uniforms.powRGB.value.set(1, 1, 1);
+  pGrade.uniforms.mulRGB.value.set(1.05, 0.98, 0.92);
+  pComposer.addPass(pGrade);
+  const pVig = new ShaderPass(VignetteShader);
+  pVig.uniforms.offset.value = 1.0;
+  pVig.uniforms.darkness.value = 0.85;
+  pComposer.addPass(pVig);
+  pComposer.addPass(new SMAAPass());
+  pComposer.addPass(new OutputPass());
+  // (class names are mangled by terser minification — assert with
+  // instanceof, never constructor.name.)
+  const pOk = pComposer.passes[0] instanceof RenderPass
+    && pComposer.passes[1] instanceof UnrealBloomPass
+    && pComposer.passes[2] instanceof ShaderPass
+    && pComposer.passes[3] instanceof ShaderPass
+    && pComposer.passes[4] instanceof SMAAPass
+    && pComposer.passes[5] instanceof OutputPass;
+  check('pipeline chain order Render>bloom>grade>vignette>SMAA>Output', pOk && pComposer.passes.length === 6, `passes=${pComposer.passes.length}`);
+  check('pipeline bloom 0.7/0.5/1.0', pBloom.strength === 0.7 && pBloom.radius === 0.5 && pBloom.threshold === 1.0,
+    `s=${pBloom.strength} r=${pBloom.radius} t=${pBloom.threshold}`);
+  check('pipeline target HalfFloat + samples 4',
+    pComposer.renderTarget1.texture.type === THREE.HalfFloatType && pComposer.renderTarget1.samples === 4,
+    `type=${pComposer.renderTarget1.texture.type} samples=${pComposer.renderTarget1.samples}`);
+  check('pipeline OutputPass is last', pComposer.passes[pComposer.passes.length - 1] instanceof OutputPass, '');
+  check('pipeline SMAA present, no FXAA',
+    pOk && pComposer.passes.some((p) => p instanceof SMAAPass),
+    'all 6 slots are known classes, none FXAA');
+  check('pipeline vignette darkness 0.85 (0.7-1.0)', pVig.uniforms.darkness.value === 0.85 && pVig.uniforms.offset.value === 1.0,
+    `darkness=${pVig.uniforms.darkness.value}`);
+  check('pipeline grade warm mulRGB, neutral pow',
+    pGrade.uniforms.mulRGB.value.x === 1.05 && pGrade.uniforms.mulRGB.value.y === 0.98 && pGrade.uniforms.mulRGB.value.z === 0.92
+    && pGrade.uniforms.powRGB.value.x === 1, `mul=${pGrade.uniforms.mulRGB.value.toArray().join(',')}`);
+  const pPmrem = new THREE.PMREMGenerator(renderer);
+  const pEnv = pPmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pPmrem.dispose();
+  scene.environment = pEnv;
+  scene.environmentIntensity = 0.15;
+  check('pipeline env map via PMREM+RoomEnvironment', !!scene.environment && scene.environment.isTexture && scene.environmentIntensity === 0.15, '');
+  let pRendered = false;
+  try { pComposer.render(); pRendered = true; } catch (e) { log('  pipeline render threw: ' + e.message); }
+  check('pipeline composer renders one frame', pRendered, '');
+  sky.apply('day', 'day');
+  check('pipeline day exposure 1.05 (1.0-1.15)', renderer.toneMappingExposure === 1.05, `exposure=${renderer.toneMappingExposure}`);
+  check('pipeline fog is FogExp2, horizon-matched', scene.fog && scene.fog.isFogExp2 && scene.fog.color.getHex() === sky.palette.fog,
+    `fog=${scene.fog && scene.fog.color.getHexString()} horizon=${sky.palette.fog.toString(16)}`);
 
   const fails = results.filter((r) => !r.ok).length;
   log(`\nSELFTEST ${fails === 0 ? 'ALL PASS' : fails + ' FAILURES'} (${results.length} checks)`);

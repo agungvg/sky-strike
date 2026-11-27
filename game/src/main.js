@@ -4,6 +4,15 @@
 // ?shot=cover|cockpit|storm|map renders one deterministic dossier frame
 // of the live game.
 import * as THREE from 'three';
+import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.min.js';
+import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.min.js';
+import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.min.js';
+import { SMAAPass } from '../vendor/addons/postprocessing/SMAAPass.min.js';
+import { ShaderPass } from '../vendor/addons/postprocessing/ShaderPass.min.js';
+import { OutputPass } from '../vendor/addons/postprocessing/OutputPass.min.js';
+import { VignetteShader } from '../vendor/addons/shaders/VignetteShader.min.js';
+import { ColorCorrectionShader } from '../vendor/addons/shaders/ColorCorrectionShader.min.js';
+import { RoomEnvironment } from '../vendor/addons/environments/RoomEnvironment.min.js';
 import { PALETTES, MISSIONS, RUNWAY } from './config.js';
 import { Sky } from './sky.js';
 import { Terrain, groundHeight } from './terrain.js';
@@ -44,6 +53,9 @@ class Game {
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05; // default (day palette);
+    // Sky.apply overrides it per palette (day 1.05 / golden 1.10 /
+    // clouds 1.14) — one value per palette, never per frame.
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap; // r187: PCFSoftShadowMap removed
@@ -51,6 +63,58 @@ class Game {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.5, 14000);
     this.camera.position.set(0, 300, 1600);
+
+    // --- render pipeline (Solara Bay preset, skill threejs-post-processing) ---
+    // Env map first: PMREM + RoomEnvironment (built into three, no HDRI
+    // download) so PBR metal (kaiju gunmetal, jet grey) reflects light
+    // instead of going black in the dark storm frame. Intensity 0.5 keeps
+    // the golden-hour mood — the room light lifts metal, it does not
+    // re-light the scene.
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    // 0.15, not 0.5: A/B 27 Nov showed 0.5 washed the bright-day
+    // shots flat (uniform lift on every roughness-1 surface) — the game
+    // already has key + hemi + fill lights tuned without an env map.
+    // 0.15 is just enough to keep gunmetal from going black in storm.
+    this.scene.environmentIntensity = 0.15;
+    pmrem.dispose();
+    // Composer chain (order is the look): RenderPass -> bloom (HDR-bright
+    // only: sun disc, afterburner, kaiju jaw, blade) -> warm grade ->
+    // vignette -> SMAA (linear space, before OutputPass) -> OutputPass
+    // LAST (tone mapping + sRGB once). No FXAA (never SMAA + FXAA), no
+    // SSAO / DoF (cost + readability). HalfFloat target kills sky
+    // banding; samples 4 is the composer's MSAA (antialias:true never
+    // reaches composer buffers).
+    this.composer = new EffectComposer(this.renderer,
+      new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+        type: THREE.HalfFloatType, samples: 4,
+      }));
+    this.composer.setSize(window.innerWidth, window.innerHeight);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Threshold 1.0, NOT the brief's 0.85: A/B 27 Nov (controlled, same
+    // 30-frame cover staging, 1280px): 0.85 bloomed the whole bright-day
+    // sky — sky-band mean 167 -> 186, pixels >240: 0.1% -> 22.9%, clouds
+    // dissolved into white haze. 1.0 restricts bloom to true HDR (>1:
+    // sun core, afterburner, emissive jaw/blade/fire). Strength/radius
+    // stay at the preset 0.7/0.5. Revisit only if the day sky is ever
+    // darkened below 0.85 luminance.
+    this.bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      0.7,  // strength — glow without washing the frame
+      0.5,  // radius
+      1.0,  // threshold — true HDR only (see A/B note above)
+    );
+    this.composer.addPass(this.bloomPass);
+    this.gradePass = new ShaderPass(ColorCorrectionShader);
+    this.gradePass.uniforms.powRGB.value.set(1, 1, 1); // neutral
+    this.gradePass.uniforms.mulRGB.value.set(1.05, 0.98, 0.92); // warm push
+    this.composer.addPass(this.gradePass);
+    this.vignettePass = new ShaderPass(VignetteShader);
+    this.vignettePass.uniforms.offset.value = 1.0;
+    this.vignettePass.uniforms.darkness.value = 0.85; // 0.7–1.0: focus, not crush
+    this.composer.addPass(this.vignettePass);
+    this.composer.addPass(new SMAAPass());
+    this.composer.addPass(new OutputPass()); // MUST be last
 
     // --- world ---
     this.sky = new Sky(this.scene, this.renderer);
@@ -617,7 +681,7 @@ class Game {
 
   renderOnce() {
     this.step(0.016);
-    this.renderer.render(this.scene, this.camera);
+    this.composer.render();
   }
 
   loop() {
@@ -630,7 +694,7 @@ class Game {
         if (this.frameTimes.length > 240) this.frameTimes.shift();
       }
       this.step(dt);
-      this.renderer.render(this.scene, this.camera);
+      this.composer.render();
       if (this.shotMode) {
         this.framesRendered = (this.framesRendered || 0) + 1;
         if (this.framesRendered === 30) {
@@ -647,6 +711,7 @@ class Game {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.composer.setSize(window.innerWidth, window.innerHeight);
   }
 }
 
