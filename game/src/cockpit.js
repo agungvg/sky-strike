@@ -1,8 +1,9 @@
 // Cockpit: the full jet panel — 8 lit analog gauges on one canvas, a
 // missile target strip (target name, range, lock bar, SHOOT cue), a lit
 // switch row, a fighter yoke, and a throttle quadrant with an afterburner
-// detent — under a canopy frame. The panel never eats more than ~37% of
-// the frame; the runway, PAPI and terrain stay visible through the glass.
+// detent — under a canopy frame. The panel takes ~39% of the frame
+// (ronde 2: 280 px, the reference's big bright displays); the round bow,
+// the RECON ring and the canyon stay visible through the glass.
 // v4: + MFD tactical screen (mini-map + target list), +4 switches,
 // warning lamp strip, HUD combiner glass with lock symbology, visor
 // reflection, engraved placard, panel rivets/wear (CSS).
@@ -60,17 +61,21 @@ export class Cockpit {
 
     // rev: MFD first in the flex row, so the radar sits LEFT like the
     // reference — it is drawn as a circular TAC RADAR scope (see drawMfd).
+    // Ronde 2: taller canvas (210) so the scope can grow and the text can
+    // breathe — the panel is the reference's big bright display, not a
+    // strip of small dark screens.
     this.mfdCanvas = document.createElement('canvas');
     this.mfdCanvas.className = 'cockpit-mfd';
     this.mfdCanvas.width = 260;
-    this.mfdCanvas.height = 190;
+    this.mfdCanvas.height = 210;
     this.panel.appendChild(this.mfdCanvas);
 
-    // gauge canvas: 8 gauges (rev: slightly narrower, room for ENG)
+    // gauge canvas: 8 gauges (ronde 2: 740 wide, r 56, taller 210 — the
+    // strip is bigger and brighter; see draw() for the layout).
     this.gaugeCanvas = document.createElement('canvas');
     this.gaugeCanvas.className = 'cockpit-gauges';
-    this.gaugeCanvas.width = 732;
-    this.gaugeCanvas.height = 190;
+    this.gaugeCanvas.width = 740;
+    this.gaugeCanvas.height = 210;
     this.panel.appendChild(this.gaugeCanvas);
 
     // rev: ENG / FUEL / SYS — the reference's right display: THR / FUEL /
@@ -186,9 +191,10 @@ export class Cockpit {
   gauge(x, cx, cy, r, label, draw) {
     x.save();
     x.translate(cx, cy);
-    // bezel + face
+    // bezel + face (ronde 2: face lightened so the gauges read bright,
+    // like the reference's lit displays, not black holes)
     x.beginPath(); x.arc(0, 0, r, 0, Math.PI * 2);
-    x.fillStyle = '#0c0f14'; x.fill();
+    x.fillStyle = '#12171f'; x.fill();
     x.lineWidth = 4; x.strokeStyle = '#3a4552'; x.stroke();
     x.beginPath(); x.arc(0, 0, r - 5, 0, Math.PI * 2);
     x.strokeStyle = 'rgba(255,220,140,0.55)'; x.lineWidth = 1; x.stroke();
@@ -205,7 +211,7 @@ export class Cockpit {
       x.lineTo(Math.cos(ang) * (r - 3), Math.sin(ang) * (r - 3));
       x.stroke();
     }
-    x.font = 'bold 10px monospace'; x.textAlign = 'center'; x.fillStyle = '#ffd98a';
+    x.font = 'bold 11px monospace'; x.textAlign = 'center'; x.fillStyle = '#ffd98a';
     x.fillText(label, 0, r - 14);
     draw(x, r);
     x.restore();
@@ -225,13 +231,15 @@ export class Cockpit {
     const x = this.gaugeCanvas.getContext('2d');
     const W = this.gaugeCanvas.width, H = this.gaugeCanvas.height;
     x.clearRect(0, 0, W, H);
-    const r = 52;
-    const y0 = 78;
-    const xs = [40, 131, 222, 313, 404, 495, 586, 677];
+    // ronde 2: bigger gauges (r 56, canvas 740x210) — the strip is the
+    // reference's bright middle display, not a row of small dark dials.
+    const r = 56;
+    const y0 = 100;
+    const xs = [42, 133, 224, 315, 406, 497, 588, 679];
 
     // rev: the centre display is the ADI / HORIZON — header over the
     // horizon ball (gauge 4), like the reference's middle panel.
-    x.font = 'bold 12px monospace'; x.textAlign = 'center';
+    x.font = 'bold 13px monospace'; x.textAlign = 'center';
     x.fillStyle = '#3ddc84';
     x.fillText('ADI / HORIZON', xs[3], 14);
 
@@ -239,7 +247,7 @@ export class Cockpit {
     this.gauge(x, xs[0], y0, r, 'AIRSPEED', (g) => {
       const a = (-Math.PI * 0.75) + (flight.speedKt / 520) * Math.PI * 1.5;
       this.needle(g, r, a);
-      g.font = 'bold 16px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 18px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(flight.speedKt)), 0, r - 34);
     });
     // 2. ALTIMETER (feet, 0-4000)
@@ -248,14 +256,14 @@ export class Cockpit {
       this.needle(g, r, a);
       const a2 = (-Math.PI * 0.75) + (Math.min(flight.altMslFt, 4000) / 4000) * Math.PI * 1.5;
       this.needle(g, r * 0.55, a2, '#ffd76a', 2);
-      g.font = 'bold 16px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 18px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(flight.altMslFt)), 0, r - 34);
     });
     // 3. HEADING / COMPASS
     this.gauge(x, xs[2], y0, r, 'HEADING', (g) => {
       g.save();
       g.rotate(-flight.heading);
-      g.font = 'bold 11px monospace'; g.textAlign = 'center';
+      g.font = 'bold 12px monospace'; g.textAlign = 'center';
       for (const [deg, lab] of [[0, 'N'], [90, 'E'], [180, 'S'], [270, 'W']]) {
         const a = (deg * Math.PI) / 180;
         g.fillStyle = '#e8e4d8';
@@ -264,7 +272,7 @@ export class Cockpit {
       g.restore();
       g.fillStyle = '#ffd76a';
       g.beginPath(); g.moveTo(-5, -(r - 8)); g.lineTo(5, -(r - 8)); g.lineTo(0, -(r - 18)); g.closePath(); g.fill();
-      g.font = 'bold 13px monospace'; g.fillStyle = '#7ee8ff';
+      g.font = 'bold 14px monospace'; g.fillStyle = '#7ee8ff';
       g.fillText(String(Math.round(flight.hdgDeg)).padStart(3, '0'), 0, r - 34);
     });
     // 4. ATTITUDE / ADI (artificial horizon) — rev: centre of the strip,
@@ -289,14 +297,14 @@ export class Cockpit {
       // afterburner arc
       g.strokeStyle = '#7ab8ff'; g.lineWidth = 4;
       g.beginPath(); g.arc(0, 0, r - 9, (-Math.PI * 0.75) + 0.92 * Math.PI * 1.5, (-Math.PI * 0.75) + Math.PI * 1.5); g.stroke();
-      g.font = 'bold 16px monospace'; g.fillStyle = flight.afterburner ? '#7ab8ff' : '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 18px monospace'; g.fillStyle = flight.afterburner ? '#7ab8ff' : '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(rpm)), 0, r - 34);
     });
     // 6. FUEL
     this.gauge(x, xs[5], y0, r, 'FUEL %', (g) => {
       const a = (-Math.PI * 0.75) + (flight.fuel / 100) * Math.PI * 1.5;
       this.needle(g, r, a, flight.fuel < 20 ? '#ff5040' : '#ffffff');
-      g.font = 'bold 16px monospace'; g.fillStyle = flight.fuel < 20 ? '#ff5040' : '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 18px monospace'; g.fillStyle = flight.fuel < 20 ? '#ff5040' : '#7ee8ff'; g.textAlign = 'center';
       g.fillText(String(Math.round(flight.fuel)), 0, r - 34);
     });
     // 7. VSI (fpm, +/-2000)
@@ -304,7 +312,7 @@ export class Cockpit {
       const vsi = flight.vsi * 196.85;
       const a = (-Math.PI * 0.75) + ((vsi + 2000) / 4000) * Math.PI * 1.5;
       this.needle(g, r, a);
-      g.font = 'bold 14px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 16px monospace'; g.fillStyle = '#7ee8ff'; g.textAlign = 'center';
       g.fillText((vsi >= 0 ? '+' : '') + String(Math.round(vsi)), 0, r - 34);
     });
     // 8. G METER / TURN (bank + ball + G)
@@ -317,7 +325,7 @@ export class Cockpit {
       const ballX = Math.sin(flight.roll) * 22;
       g.fillStyle = '#ffd76a';
       g.beginPath(); g.arc(ballX, r - 30, 6, 0, Math.PI * 2); g.fill();
-      g.font = 'bold 13px monospace'; g.fillStyle = flight.overG ? '#ff5040' : '#7ee8ff'; g.textAlign = 'center';
+      g.font = 'bold 14px monospace'; g.fillStyle = flight.overG ? '#ff5040' : '#7ee8ff'; g.textAlign = 'center';
       g.fillText(`${flight.g.toFixed(1)}G`, 0, r - 34);
     });
 
@@ -381,14 +389,14 @@ export class Cockpit {
   // Same tactical content as the v4 MFD (live targets + ally + list).
   drawMfd(flight, targets, lk, ultraOn) {
     const x = this.mfdCanvas.getContext('2d');
-    const W = 260, H = 190;
+    const W = 260, H = 210;
     x.clearRect(0, 0, W, H);
-    x.fillStyle = '#06110a'; x.fillRect(0, 0, W, H);
-    x.strokeStyle = '#1e5c38'; x.lineWidth = 2; x.strokeRect(1, 1, W - 2, H - 2);
-    x.font = 'bold 11px monospace'; x.textAlign = 'left';
-    x.fillStyle = '#3ddc84'; x.fillText('TAC RADAR · 4 KM', 8, 16);
-    x.fillStyle = '#7ee8ff'; x.textAlign = 'right'; x.fillText('RNG 4KM', W - 8, 16);
-    const cx = W / 2, cy = 96, R = 62;
+    x.fillStyle = '#071410'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = '#2a7a4a'; x.lineWidth = 2; x.strokeRect(1, 1, W - 2, H - 2);
+    x.font = 'bold 13px monospace'; x.textAlign = 'left';
+    x.fillStyle = '#4be88a'; x.fillText('TAC RADAR · 4 KM', 8, 18);
+    x.fillStyle = '#8ef0ff'; x.textAlign = 'right'; x.fillText('RNG 4KM', W - 8, 18);
+    const cx = W / 2, cy = 110, R = 70;
     // scope face
     x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2);
     x.fillStyle = '#04120a'; x.fill();
@@ -443,8 +451,8 @@ export class Cockpit {
     x.fillStyle = '#ffffff';
     x.beginPath(); x.moveTo(cx, cy - 7); x.lineTo(cx + 5, cy + 6); x.lineTo(cx - 5, cy + 6); x.closePath(); x.fill();
     // target list (2 rows fit under the scope)
-    x.font = '10px monospace'; x.textAlign = 'left';
-    let ly = 172;
+    x.font = '12px monospace'; x.textAlign = 'left';
+    let ly = 196;
     const rows = [];
     if (targets) {
       for (const t of targets) {

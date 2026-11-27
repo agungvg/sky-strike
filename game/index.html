@@ -101,48 +101,53 @@
     background: linear-gradient(115deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 18%, rgba(255,255,255,0) 30%, rgba(255,255,255,0.05) 62%, rgba(255,255,255,0) 74%);
     pointer-events: none; }
   .cockpit-hudglass { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .cockpit-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 248px;
-    background: linear-gradient(180deg, #171c24 0%, #0d1015 100%);
-    border-top: 3px solid #2c3540; display: flex; align-items: flex-start; padding: 10px 18px 0; gap: 14px; }
+  /* ronde 2: panel TALLER (280) + BRIGHTER — the reference's displays
+     are big lit screens, not a dark strip. Width is capped by the 1280
+     frame (260 + 740 + 230 + gaps + padding = 1280 exactly), so the
+     growth is height + brightness + font size, not width. */
+  .cockpit-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 280px;
+    background: linear-gradient(180deg, #1e2531 0%, #12161d 100%);
+    border-top: 3px solid #3a4552; display: flex; align-items: flex-start; padding: 10px 14px 0; gap: 10px; }
   /* v4: rivets along the panel top edge + faint wear streaks */
   .cockpit-panel::before { content: ''; position: absolute; top: 4px; left: 12px; right: 12px; height: 6px;
     background-image: radial-gradient(circle, #4a5566 1.6px, transparent 1.8px);
     background-size: 46px 6px; background-repeat: repeat-x; opacity: 0.8; }
   .cockpit-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none;
     background: repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 90px); }
-  .cockpit-gauges { flex: 0 0 auto; margin-top: 48px; }
-  .cockpit-mfd { flex: 0 0 auto; margin-top: 48px; border-radius: 4px; }
+  .cockpit-gauges { flex: 0 0 auto; margin-top: 40px; box-shadow: 0 0 16px rgba(126,232,255,0.16); border-radius: 4px; }
+  .cockpit-mfd { flex: 0 0 auto; margin-top: 40px; border-radius: 4px;
+    box-shadow: 0 0 16px rgba(75,232,138,0.28); border: 1px solid #2a7a4a; }
   /* rev: the ENG / FUEL / SYS display — bars over the throttle quadrant. */
-  .cockpit-eng { flex: 0 0 220px; margin-top: 48px; background: #0c0f14;
-    border: 1px solid #2c3540; border-radius: 4px; padding: 8px 10px;
-    display: flex; flex-direction: column; gap: 6px; }
-  .eng-title { font-size: 11px; font-weight: bold; letter-spacing: 1px; color: #3ddc84; }
+  .cockpit-eng { flex: 0 0 230px; margin-top: 40px; background: #10151d;
+    border: 1px solid #3a4552; border-radius: 4px; padding: 10px 12px;
+    display: flex; flex-direction: column; gap: 7px; box-shadow: 0 0 14px rgba(255,215,106,0.10); }
+  .eng-title { font-size: 13px; font-weight: bold; letter-spacing: 1px; color: #4be88a; }
   .eng-row { display: flex; align-items: center; gap: 8px; }
-  .eng-label { width: 34px; font-size: 10px; color: #8a94a3; }
-  .eng-bar { flex: 1; height: 9px; background: rgba(255,255,255,0.14); border-radius: 5px; overflow: hidden; }
+  .eng-label { width: 38px; font-size: 12px; color: #aab4c2; }
+  .eng-bar { flex: 1; height: 12px; background: rgba(255,255,255,0.16); border-radius: 6px; overflow: hidden; }
   .eng-fill { height: 100%; width: 50%; }
-  .eng-val { width: 34px; text-align: right; font-size: 11px; color: #fff; }
+  .eng-val { width: 38px; text-align: right; font-size: 13px; color: #fff; }
   .cockpit-eng .cockpit-quadrant { margin: 2px 0 0; }
-  .cockpit-eng .cq-title { font-size: 10px; }
+  .cockpit-eng .cq-title { font-size: 11px; }
   .cockpit-eng .cq-levers { justify-content: center; }
-  .cockpit-eng .cq-track { height: 56px; }
+  .cockpit-eng .cq-track { height: 64px; }
   .cockpit-tgt { position: absolute; top: 6px; right: 18px; display: flex; gap: 14px; align-items: center;
-    font-size: 12px; font-weight: bold; color: #ffb020; }
+    font-size: 13px; font-weight: bold; color: #ffb020; }
   .cockpit-tgt .tgt-name { color: #fff; }
   .cockpit-tgt .tgt-lock.on { color: var(--ok); }
   .cockpit-tgt .tgt-shoot { display: none; color: var(--danger); border: 1px solid var(--danger);
     padding: 1px 8px; border-radius: 3px; animation: blink 0.5s steps(2) infinite; }
   .cockpit-switches { position: absolute; top: 6px; left: 18px; right: 340px; display: flex; gap: 10px; }
-  .cockpit-switch { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #8a94a3; }
-  .cockpit-switch .sw-dot { width: 9px; height: 9px; border-radius: 50%; background: #333; border: 1px solid #555; }
+  .cockpit-switch { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aab4c2; }
+  .cockpit-switch .sw-dot { width: 11px; height: 11px; border-radius: 50%; background: #333; border: 1px solid #555; }
   .cockpit-switch.lit .sw-dot { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
   .cockpit-switch.lit { color: #d8e8d8; }
   .cockpit-switch.eject .sw-label { color: #ff5040; font-weight: bold; }
   .cockpit-switch.eject .sw-dot { border-color: #ff5040; }
   /* v4: warning lamp strip under the switches */
   .cockpit-lamps { position: absolute; top: 26px; left: 18px; display: flex; gap: 14px; }
-  .cockpit-lamp { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #8a94a3; }
-  .cockpit-lamp .lamp-dot { width: 10px; height: 10px; border-radius: 2px; background: #2a2f38; border: 1px solid #555; }
+  .cockpit-lamp { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aab4c2; }
+  .cockpit-lamp .lamp-dot { width: 12px; height: 12px; border-radius: 2px; background: #2a2f38; border: 1px solid #555; }
   .cockpit-lamp.amber.on .lamp-dot { background: #ffb020; box-shadow: 0 0 8px #ffb020; }
   .cockpit-lamp.red.on .lamp-dot { background: #ff5040; box-shadow: 0 0 8px #ff5040; animation: blink 0.7s steps(2) infinite; }
   .cockpit-lamp.green.on .lamp-dot { background: var(--ok); box-shadow: 0 0 7px var(--ok); }

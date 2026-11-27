@@ -14,6 +14,8 @@
 import * as THREE from 'three';
 import { KT } from './flight.js';
 import { KAIJU_CHEST_LOCAL } from './kaiju.js';
+import { makeNoise } from './random.js';
+import { SEED } from './config.js';
 
 // Place the plane and freeze the flight state for a shot.
 function pose(game, { x, y, z, headingDeg, pitchDeg = 0, rollDeg = 0, speedKt = 280, throttle = 0.72, fuel = 74, score = 0, gates = 0, flaps = 0 }) {
@@ -55,6 +57,103 @@ function duskLook(game) {
   game.clouds.tint(0xffd9b0, 0xff9d7a);
   game.weather.setStorm(false);
   game.lightning.auto = false;
+}
+
+// Ronde 2 (cockpit, ref-cockpit-round): SNOWY CANYON, shot-2 only. The
+// reference is a snow canyon — white walls left/right, dusk sky — but the
+// shared terrain's snowLine (900 m) leaves the canyon walls brown rock,
+// which is why shot 2 read as "brown hills + pines". The terrain mesh is
+// built fresh per shot load, so recoloring its vertex colors HERE touches
+// only this frame: shots 1/3/4 keep the green day look (their md5s are
+// verified unchanged after the re-render). Rule: above 320 m -> snow
+// white, 170-320 m -> pale grey rock, below that keep the valley floor.
+// Pines are hidden for this frame only (no treeline in a snow canyon);
+// the instanced meshes are found by radial segments — canopy cones (7)
+// and trunks (5) — village roofs (4) and all other meshes are untouched.
+function snowCanyon(game) {
+  const mesh = game.terrain.mesh;
+  const pos = mesh.geometry.attributes.position;
+  const col = mesh.geometry.attributes.color;
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i);
+    if (y <= 170) continue;
+    // baked jitter + height/x striation bands, so the walls read as
+    // rock strata under snow, not flat pink (first pass washed out to a
+    // featureless salmon under the dusk key + fog). Snow is tinted
+    // slightly blue so the warm key reads white; mid slopes go darker
+    // grey for contrast.
+    const stripe = 0.80 + 0.20 * (0.5 + 0.5 * Math.sin(y * 0.06 + x * 0.008));
+    const j = (0.88 + ((col.getX(i) + col.getY(i) * 0.7) % 0.12)) * stripe;
+    if (y > 320) c.setRGB(0.88 * j, 0.90 * j, 0.98 * j);
+    else c.setRGB(0.58 * j, 0.57 * j, 0.62 * j);
+    col.setXYZ(i, c.r, c.g, c.b);
+  }
+  col.needsUpdate = true;
+  // halve the dusk fog for this frame only: the golden fog was washing
+  // the far ridge into pink soup at 1.5 km; the canyon needs its strata.
+  if (game.scene.fog) game.scene.fog.density = 0.00022;
+  game.scene.traverse((o) => {
+    if (o.isInstancedMesh && o.geometry && o.geometry.parameters) {
+      const rs = o.geometry.parameters.radialSegments;
+      if (rs === 7 || rs === 5) o.visible = false;
+    }
+  });
+}
+
+// Ronde 2: CANYON WALLS, shot-2 only (backdrop prop, like addSmokeFire).
+// The shared world is a WIDE valley: the plane flies ~200 m above the
+// floor, so the real ridges sit at/below eye level and the frame reads
+// as flat snowfield. The reference is a NARROW slot canyon with walls
+// towering on both sides. These two shot-only walls flank the flight
+// path (gate.x +/- 160 m), rise ~330 m above the plane, and converge to
+// the vanishing point past the gate — the west wall sunlit, the east
+// wall in dusk shadow, like the reference. They exist only in this
+// frame; gameplay and the other shots never see them.
+function canyonWalls(game, gate) {
+  const mkWall = (wallX, seed, flip) => {
+    const fbm = makeNoise(seed);
+    const geo = new THREE.PlaneGeometry(1200, 700, 48, 14);
+    geo.rotateY(flip ? -Math.PI / 2 : Math.PI / 2);
+    // displace along the wall normal (world X) with fbm, so the face is
+    // faceted rock, not a flat billboard
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const y = pos.getY(i), z = pos.getZ(i);
+      pos.setX(i, pos.getX(i) + fbm(z * 0.008, y * 0.008, 3) * 26);
+    }
+    geo.translate(wallX, 330, gate.z - 200);
+    // vertex colours from WORLD position: snow cap, banded strata, dark base
+    const flat = geo.toNonIndexed();
+    const p2 = flat.attributes.position;
+    const colors = new Float32Array(p2.count * 3);
+    const c = new THREE.Color();
+    for (let i = 0; i < p2.count; i++) {
+      const y = p2.getY(i), z = p2.getZ(i);
+      const band = 0.5 + 0.5 * Math.sin(y * 0.09 + z * 0.02);
+      const crack = 0.5 + 0.5 * Math.sin(z * 0.13 + y * 0.03);
+      // brighter than the first pass: the warm dusk key turned the
+      // 0.62-grey strata TAN and the shadowed wall near-black. Snow now
+      // starts at 460 m (more of the visible wall is white), strata are
+      // 0.80-based, base 0.58-based — the reference's walls are WHITE
+      // snow + blue-grey rock, not brown.
+      if (y > 420) c.setRGB(0.92, 0.93, 0.97); // snow cap
+      else if (y > 380) { // mixed snow/rock strata
+        const s = 0.80 + 0.18 * band;
+        c.setRGB(s, s, s * 1.04);
+      } else { // dark rock base with striations
+        const s = (0.58 + 0.18 * band) * (0.75 + 0.25 * crack);
+        c.setRGB(s, s, s * 1.08);
+      }
+      colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+    }
+    flat.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    flat.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 1, metalness: 0 });
+    game.scene.add(new THREE.Mesh(flat, mat));
+  };
+  mkWall(gate.x - 160, SEED + 31, false); // west wall, faces east (+x), sunlit
+  mkWall(gate.x + 160, SEED + 47, true);  // east wall, faces west (-x), shadowed
 }
 
 // Storm-night look for the battle shot only (reference: dark storm sky,
@@ -146,16 +245,29 @@ export const SHOTS = {
   //    Falcon-7 threads gate G-06, 160 m ahead, the round bow framing the
   //    snowy ridge; TAC RADAR + ADI + ENG/FUEL/SYS on the panel, the
   //    combiner's yellow RECON ring on the gate. 8 gauges + MFD + 12
-  //    switches + lamp strip + yoke + levers all present.
+  //    switches + lamp strip + yoke + levers all present. Ronde 2: the
+  //    world canyon is too wide to read, so shot-only canyon walls flank
+  //    the path (see canyonWalls) and only G-06's ring is shown.
   cockpit(game) {
     game.setMission(1, { silent: true });
     duskLook(game);
+    snowCanyon(game); // ronde 2: white canyon walls, no pines — shot 2 only
     // gate G-06 (index 5) is the ring in the windscreen: the plane sits
     // 160 m south of it, 20 m below its centre, so the ring reads big
     // (~250 px) and centred under the bow, FPV low inside it. G-06, not
     // G-05: this far up the canyon the plane is above the near slope, so
     // the snowy north ridge — not the brown hillside — fills the glass.
     const gate = game.runner.gates[5].pos;
+    canyonWalls(game, gate); // ronde 2: slot-canyon walls flanking the path
+    // cool fill from the west: lifts the shadowed east wall out of
+    // near-black into blue-grey (the key comes from the north-east, so
+    // the east face gets no key at all). Same pattern as stormLook's fill.
+    const fill = new THREE.DirectionalLight(0xaec6e8, 0.8);
+    fill.position.set(-1500, 700, -800);
+    game.scene.add(fill);
+    // paler key for this frame only: the saturated orange key turned the
+    // sunlit wall TAN; a paler warm key lets the white snow read white.
+    game.sky.key.color.setHex(0xffe0b8);
     pose(game, {
       x: gate.x, y: gate.y - 20, z: gate.z + 160, headingDeg: 359, pitchDeg: 0, rollDeg: 0,
       speedKt: 388, throttle: 0.86, fuel: 68, score: 2150, gates: 5, flaps: 0,
@@ -164,8 +276,10 @@ export const SHOTS = {
     game.flight.g = 1.0;
     game.flight.vsi = 0;
     game.runner.nextGate = 5;
+    // ronde 2: ONLY G-06 visible — the second ring (G-07) used to peek
+    // cut off at the right edge of the frame, which read as a bug.
     game.runner.gateMeshes.forEach((m, i) => {
-      m.visible = i >= 5;
+      m.visible = i === 5;
       m.material = i === 5 ? game.runner.nextMat : game.runner.ringMat;
     });
     game.setCameraMode('cockpit');
@@ -253,16 +367,18 @@ export const SHOTS = {
     game.missiles.freezeBurst(0.2);
     const boom = game.missiles.explosions[game.missiles.explosions.length - 1];
     if (boom) {
-      // ITERASI 2: fireball DIKECILIN (dulu 1.2x/1.4x menutupi jet +
-      // dada kaiju) dan DIGESER ke timur (kanan frame) supaya JET
-      // KELIHATAN di antara kedua raksasa, bukan tertutup bola api.
-      boom.flash.scale.setScalar(0.8);
+      // ITERASI 2c: flash 0.5 (dulu 1.0: bola krem pucat menutupi api
+      // oranye dan kebaca balon abu-abu) + burst ditarik 12 m ke arah
+      // kamera supaya sprite api oranye duduk DI DEPAN permukaan dada,
+      // bukan setengah tenggelam di torso.
+      boom.flash.scale.setScalar(0.5);
       boom.fire.scale.set(boom.fire.scale.x * 1.0, boom.fire.scale.y * 1.0, 1);
       boom.smoke.forEach((s) => { s.scale.x *= 1.0; s.scale.y *= 1.0; });
       // pull the burst off the chest surface toward the kaiju's east
-      // side, or the torso curve hides it behind the lock diamond
+      // side and toward the camera, or the torso curve hides it behind
+      // the lock diamond
       boom.group.position.x += 14;
-      boom.group.position.z -= 6;
+      boom.group.position.z += 12;
     }
     // lock the boss: diamond on its chest + range + SHOOT
     game.missiles.lock = {
@@ -272,6 +388,12 @@ export const SHOTS = {
     // blade, not beam, in this frame: the old light beam stays in the
     // game for gameplay, but the reference face-off is won by the blade
     game.missiles.ultra.beam.visible = false;
+    // ITERASI 2b: the atomic breath is ALSO hidden in this frame — at 3x
+    // group scale its 48 m translucent tube reads as a giant blue
+    // capsule/rocket floating over the kaiju's head, not a flame plume.
+    // Gameplay untouched (missiles.js still shows it in the boss sortie);
+    // the jaw glow + fireball carry the fire in this shot.
+    if (kaiju.breath) kaiju.breath.visible = false;
     // close framing: the giants fill the frame, the jet reads small
     // between them
     game.setCameraMode('chase', { side: 0.3, dist: 45, height: 10 });
