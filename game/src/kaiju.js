@@ -117,18 +117,29 @@ export function buildKaiju() {
     armor.rotation.z = side * 0.12;
     add(armor, side * 3.4, 20, 8.8);
   }
+  // RONDE 5 — cyan edge strips on the armor plates: a vertical cyan
+  // accent on each side of the chest so the grey torso separates
+  // from the grey sea/sky at range.
+  for (const side of [-1, 1]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.35, 7, 0.3), new THREE.MeshBasicMaterial({ color: 0x35d8f2 }));
+    add(strip, side * 5.8, 20, 9.3);
+  }
 
-  // shoulders + short arms with claws
+  // shoulders + LONG arms that break the torso silhouette. RONDE 5:
+  // the ronde-4 arms (8 long, tucked at ±0.35) hugged the trunk and
+  // vanished into the grey column — the kaiju read as a tower. The
+  // arms are now 11 long, splayed OUTWARD (±0.8) with bigger spread
+  // claws, so the silhouette has a visible limb on each side.
   for (const side of [-1, 1]) {
     const sh = new THREE.Mesh(new THREE.SphereGeometry(3.2, 10, 8), skin);
     add(sh, side * 7.5, 27, 0);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.1, 8, 8), skin);
-    arm.rotation.z = -side * 0.35; arm.rotation.x = 0.25;
-    add(arm, side * 8.5, 21, 2.5);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.1, 11, 8), skin);
+    arm.rotation.z = -side * 0.8; arm.rotation.x = 0.25;
+    add(arm, side * 10, 20, 2.5);
     for (let c = 0; c < 3; c++) {
-      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.4, 6), spineMat);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.8, 6), spineMat);
       claw.rotation.x = Math.PI / 2 + 0.4;
-      add(claw, side * 9 + (c - 1) * 0.8, 17, 4.5);
+      add(claw, side * 12.2 + (c - 1) * 1.0, 15.5, 4.5);
     }
   }
 
@@ -147,23 +158,41 @@ export function buildKaiju() {
   // plate standing proud of it, a lower jaw jutting forward below the
   // snout, and both tooth rows in front of the glow so the teeth read
   // silhouetted against cyan — a jaw, not a light blob.
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.2, 2.6), dark);
+  // RONDE 5 — the jaw is BIGGER and reads as a mouth, not a light
+  // blob. The ronde-4 jaw (2.9-wide plate, 8-unit flare) rendered as
+  // one ambiguous blue smudge: too small against the 5.5-wide head,
+  // and the -1.0 shot yaw foreshortened the whole mouth face. The
+  // plate is now 3.8 wide (most of the snout), the flare bigger and
+  // deeper cyan, the chin juts further forward, and two cyan side
+  // strips outline the mouth corners so the jaw reads even at range.
+  // The shot yaw also turns to -0.7 (see shots.js), so the mouth face
+  // is near-frontal instead of edge-on.
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.4, 2.8), dark);
   jaw.rotation.x = 0.3; // hanging open, roaring — chin juts forward
-  add(jaw, 0, 35.7, 5.6);
-  const mouthCavity = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.4), new THREE.MeshBasicMaterial({ color: 0x061014 }));
+  add(jaw, 0, 35.6, 5.8);
+  const mouthCavity = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 0.4), new THREE.MeshBasicMaterial({ color: 0x061014 }));
   add(mouthCavity, 0, 37.0, 6.8);
   // cyan-glowing mouth interior, standing proud of the dark cavity.
-  // ITERASI 4: the iterasi-3 plate (0x8ff8ff, near-white) + 11-unit
-  // flare rendered as a WHITE-HOT RECTANGLE — a light blob, not a
-  // jaw. The plate is now deeper cyan (0x35d8f2, still bright but
-  // unmistakably blue) and the flare is smaller/dimmer, so the mouth
-  // reads CYAN; the teeth (below) do the jaw reading.
-  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x35d8f2 }));
-  add(jawGlow, 0, 37.0, 7.0);
-  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
-  jawFlare.scale.set(8, 8, 1);
-  add(jawFlare, 0, 37.0, 8.2);
+  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(3.8, 2.4, 0.5), new THREE.MeshBasicMaterial({ color: 0x2fd4f0 }));
+  add(jawGlow, 0, 37.0, 7.1);
+  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false }));
+  jawFlare.scale.set(11, 11, 1);
+  add(jawFlare, 0, 37.0, 8.4);
+  // cyan strips flanking the mouth corners — the jaw outline.
+  for (const side of [-1, 1]) {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.6, 0.35), new THREE.MeshBasicMaterial({ color: 0x35d8f2 }));
+    add(strip, side * 2.1, 37.0, 7.1);
+  }
   g.userData.jawGlow = jawGlow;
+  for (let i = 0; i < 5; i++) { // upper teeth, pointing down, in FRONT of the glow
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 6), dark);
+    tooth.rotation.x = Math.PI;
+    add(tooth, -2.0 + i * 1.0, 36.2, 7.1);
+  }
+  for (let i = 0; i < 4; i++) { // lower teeth on the open jaw, pointing up, in FRONT of the glow
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.5, 6), dark);
+    add(tooth, -1.5 + i * 1.0, 36.4, 7.0);
+  }
   for (const side of [-1, 1]) {
     const brow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 1.2), dark);
     add(brow, side * 1.8, 40.5, 2.8);
@@ -187,20 +216,9 @@ export function buildKaiju() {
     eyeGlow.scale.set(2.6, 2.6, 1);
     add(eyeGlow, side * 1.8, 39.5, 4.6);
   }
-  // ITERASI 4: teeth are DARK now, not pale metal. The iterasi-3
-  // teeth (spineMat, near-white) vanished against the white-hot glow
-  // plate — white on white. Dark teeth silhouetted against the cyan
-  // plate read instantly as a jaw, which is the reference look
-  // (cyan maw, dark teeth).
-  for (let i = 0; i < 5; i++) { // upper teeth, pointing down, in FRONT of the glow
-    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 6), dark);
-    tooth.rotation.x = Math.PI;
-    add(tooth, -1.6 + i * 0.8, 36.2, 7.0);
-  }
-  for (let i = 0; i < 4; i++) { // lower teeth on the open jaw, pointing up, in FRONT of the glow
-    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.5, 6), dark);
-    add(tooth, -1.2 + i * 0.8, 36.4, 6.9);
-  }
+  // (teeth now live with the RONDE 5 jaw block above, widened to match
+  // the 3.8-wide glow plate — the old loops here were removed as
+  // duplicates.)
 
   // dorsal spines: TWO layered rows, TALL so they crest above the back
   // and read from the front as a jagged silhouette. The main row runs
@@ -227,8 +245,22 @@ export function buildKaiju() {
     addSpine(side * 2.6, 12 + i * 3, -4.2 + i * 0.2, 3.6, 1.6);
   }
   for (const side of [-1, 1]) { // shoulder spikes, on the visible silhouette
-    addSpine(side * 7.5, 30, 1.5, 3.4, 1.5);
-    addSpine(side * 8.5, 26, 2.5, 3.0, 1.4);
+    // RONDE 5: 3.4/3.0 -> 5.0/4.2 tall — the old spikes were lost
+    // against the trunk; these crest above the shoulder line.
+    addSpine(side * 7.5, 30, 1.5, 5.0, 2.0);
+    addSpine(side * 8.5, 26, 2.5, 4.2, 1.8);
+  }
+  // RONDE 5 — head crest: three cyan-tipped spikes on the crown, so
+  // the head breaks the skyline instead of reading as a flat grey
+  // block (the reference's mecha has a spiky head crest).
+  for (const [x, h] of [[-1.8, 3.2], [0, 4.0], [1.8, 3.2]]) {
+    addSpine(x, 42.5, -0.5, h, 1.3);
+  }
+  // RONDE 5 — chest collar: a jagged crest across the upper chest
+  // FRONT. The dorsal row sits on the far side (invisible from this
+  // camera); the collar gives the front a jagged crest too.
+  for (let i = 0; i < 5; i++) {
+    addSpine(-5 + i * 2.5, 32, 6.0, 2.6, 1.1);
   }
 
   // tail: thick, muscular, trailing BEHIND the body (local -Z, away
@@ -318,7 +350,7 @@ export function buildKaiju() {
   const keyLight = new THREE.PointLight(0xbfd8ff, 2500, 500, 2);
   keyLight.position.set(0, 32, 30);
   g.add(keyLight);
-  const jawLight = new THREE.PointLight(0x66f6ff, 500, 150, 2);
+  const jawLight = new THREE.PointLight(0x66f6ff, 900, 150, 2); // RONDE 5: 500 -> 900, the bigger jaw needs more cyan spill on the muzzle
   jawLight.position.set(0, 37, 14);
   g.add(jawLight);
 
