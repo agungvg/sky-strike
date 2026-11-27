@@ -116,10 +116,10 @@ export function buildUltra() {
     core.position.set(0, 0, 7.5);
     const halo = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.6, 15.5), bladeHaloMat);
     halo.position.set(0, 0, 7.5);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(1.2, 4, 4), bladeMat);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 4), bladeMat);
     tip.rotation.x = Math.PI / 2; // point forward (+Z)
-    tip.scale.set(0.22, 1, 1.6); // flatten: a blade point, not a spike
-    tip.position.set(0, 0, 16.5);
+    tip.scale.set(0.25, 1, 1.4); // small sharp point, not a big arrowhead
+    tip.position.set(0, 0, 16.2);
     const flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(190,230,255,1)', 'rgba(60,140,255,0.7)'),
       transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
