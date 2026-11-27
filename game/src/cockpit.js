@@ -31,17 +31,25 @@ export class Cockpit {
     // each side gets an inner PILLAR rail (r 505) following the bow's
     // curve from the panel up to y 180 — the canopy frame reads as
     // pillars left + right, like the reference, not a lone thin arc.
+    // Ronde 4 (Lyso: ronde 3 "tetep gagal", pilar = pintu): the bow was
+    // still a 34px BLACK band and the side rails black — the whole frame
+    // read heavy and dead. Now dark GREY (#2b323d, never black), bow
+    // thinned to 24, rails 12 with a thin warm highlight on their inner
+    // edge, so the frame is a light grey outline that FRAMES the view
+    // instead of walling it off.
     const frame = document.createElement('div');
     frame.className = 'cockpit-frame';
     frame.innerHTML = `<svg viewBox="0 0 1280 720" preserveAspectRatio="none">
-      <path d="M0,0 L46,0 L30,720 L0,720 Z" fill="#14181f"/>
-      <path d="M1280,0 L1234,0 L1250,720 L1280,720 Z" fill="#14181f"/>
-      <path d="M 149,720 A 505,505 0 0 1 339,180" fill="none" stroke="#10141a" stroke-width="13"/>
-      <path d="M 1131,720 A 505,505 0 0 0 941,180" fill="none" stroke="#10141a" stroke-width="13"/>
-      <path class="canopy-arch" d="M 97,720 A 560,560 0 1 1 1183,720" fill="none" stroke="#10141a" stroke-width="34"/>
-      <path d="M 255,200 A 545,545 0 0 1 1025,200" fill="none" stroke="rgba(255,244,214,0.30)" stroke-width="5"/>
+      <path d="M0,0 L46,0 L30,720 L0,720 Z" fill="#1a2029"/>
+      <path d="M1280,0 L1234,0 L1250,720 L1280,720 Z" fill="#1a2029"/>
+      <path d="M 149,720 A 505,505 0 0 1 339,180" fill="none" stroke="#2b323d" stroke-width="12"/>
+      <path d="M 1131,720 A 505,505 0 0 0 941,180" fill="none" stroke="#2b323d" stroke-width="12"/>
+      <path d="M 162,720 A 497,497 0 0 1 352,180" fill="none" stroke="rgba(255,244,214,0.28)" stroke-width="2.5"/>
+      <path d="M 1118,720 A 497,497 0 0 0 928,180" fill="none" stroke="rgba(255,244,214,0.28)" stroke-width="2.5"/>
+      <path class="canopy-arch" d="M 97,720 A 560,560 0 1 1 1183,720" fill="none" stroke="#2b323d" stroke-width="24"/>
+      <path d="M 255,200 A 545,545 0 0 1 1025,200" fill="none" stroke="rgba(255,244,214,0.28)" stroke-width="4"/>
       <path d="M 81,720 A 575,575 0 1 1 1199,720" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="3"/>
-      <path d="M 121,720 A 536,536 0 1 1 1159,720" fill="none" stroke="rgba(120,220,190,0.38)" stroke-width="4"/>
+      <path d="M 121,720 A 536,536 0 1 1 1159,720" fill="none" stroke="rgba(120,220,190,0.30)" stroke-width="3"/>
     </svg>`;
     root.appendChild(frame);
 
@@ -59,28 +67,21 @@ export class Cockpit {
     this.hudGlass.height = 720;
     root.appendChild(this.hudGlass);
 
-    // Ronde 3 (ref-cockpit-clouds): the CENTRE PILLAR — the HUD combiner
-    // frame standing in the middle of the windscreen, like the reference:
-    // two slim vertical posts + a top crossbar, landing on the panel,
-    // with a faint combiner glass between them. It sits ABOVE the HUD
-    // canvas (a physical frame occludes the projected symbology), but
-    // the posts (x 600-612 / 668-680) pass through the RECON ring's
-    // interior without crossing the ring itself, so the ring, the
-    // 388 KT / 958 FT flanks and the RECON label all stay readable.
-    // (Fix after the first render: the crossbar sat at y 142 and clipped
-    // the bottom of the RECON glyphs — the frame top is now y 178, well
-    // below the label, and the posts start at y 185 so the ring's top
-    // arc passes above them.)
-    // Inline styles only — the cockpit CSS lives in index.html, which
-    // is outside this round's file boundary.
+    // Ronde 4 (ref-cockpit-clouds, Lyso: ronde 3 "tetep gagal, kokpit
+    // hadehhh"): the tall combiner frame is GONE — two 12px posts + a
+    // crossbar formed a closed black rectangle that read as a DOOR, the
+    // single worst failure of ronde 3. What remains is ONE slim tapered
+    // CENTER POST: 10 px at the panel narrowing to 5 px at the top,
+    // dark grey (never black), a warm highlight on its sunlit edge,
+    // rising from the panel (y 448) to y 310. A single line, no closed
+    // shape anywhere: it reads as a canopy strut, and the projected
+    // RECON ring passes behind it like symbology on glass.
+    this.slimRecon = false; // shot 2 only: small RECON ring, set by applyShot
     this.hudFrame = document.createElement('div');
     this.hudFrame.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
     this.hudFrame.innerHTML = `<svg viewBox="0 0 1280 720" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
-      <rect x="600" y="185" width="12" height="285" fill="#10141a"/>
-      <rect x="668" y="185" width="12" height="285" fill="#10141a"/>
-      <rect x="594" y="178" width="92" height="10" fill="#10141a"/>
-      <rect x="596" y="180" width="88" height="3" fill="rgba(255,244,214,0.22)"/>
-      <rect x="606" y="188" width="68" height="278" fill="rgba(140,220,180,0.05)" stroke="rgba(140,220,180,0.28)" stroke-width="1"/>
+      <path d="M 635,448 L 645,448 L 642.5,310 L 637.5,310 Z" fill="#2b323d"/>
+      <path d="M 636.5,446 L 638.5,312" fill="none" stroke="rgba(255,244,214,0.35)" stroke-width="1.5"/>
     </svg>`;
     root.appendChild(this.hudFrame);
 
@@ -612,35 +613,42 @@ export class Cockpit {
         const sy = (-v.y * 0.5 + 0.5) * H;
         const dist = camera.position.distanceTo(nextGate);
         if (dist > 50 && sx > 110 && sx < W - 110 && sy > 70 && sy < 460) {
-          const ringR = Math.min(200, (30 / dist) * (H / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
-          const rr = ringR + 16;
-          x.strokeStyle = '#ffd76a'; x.lineWidth = 2.5;
+          // Ronde 4 (shot 2 only, this.slimRecon): the big ring + ticks
+          // crowded the centre post and read as clutter around the
+          // "door". Slim: radius capped at 90, no tick marks, smaller
+          // labels — the ring marks the gate without owning the frame.
+          const ringCap = this.slimRecon ? 90 : 200;
+          const ringR = Math.min(ringCap, (30 / dist) * (H / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+          const rr = ringR + (this.slimRecon ? 10 : 16);
+          x.strokeStyle = '#ffd76a'; x.lineWidth = this.slimRecon ? 2 : 2.5;
           x.beginPath(); x.arc(sx, sy, rr, 0, Math.PI * 2); x.stroke();
-          x.beginPath();
-          for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
-            x.moveTo(sx + dx * (rr + 4), sy + dy * (rr + 4));
-            x.lineTo(sx + dx * (rr + 14), sy + dy * (rr + 14));
+          if (!this.slimRecon) {
+            x.beginPath();
+            for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+              x.moveTo(sx + dx * (rr + 4), sy + dy * (rr + 4));
+              x.lineTo(sx + dx * (rr + 14), sy + dy * (rr + 14));
+            }
+            x.stroke();
           }
-          x.stroke();
           const gateLabel = runner.nextGate < runner.gates.length
             ? `G-${String(runner.nextGate + 1).padStart(2, '0')}` : 'GATE';
           const mach = flight.speedKt / 661.7;
           x.textAlign = 'center';
-          x.font = 'bold 15px monospace'; x.fillStyle = '#6effaa';
+          x.font = this.slimRecon ? 'bold 13px monospace' : 'bold 15px monospace'; x.fillStyle = '#6effaa';
           x.fillText('RECON', sx, sy - rr - 14);
-          x.font = 'bold 13px monospace'; x.fillStyle = '#ffd76a';
+          x.font = this.slimRecon ? 'bold 12px monospace' : 'bold 13px monospace'; x.fillStyle = '#ffd76a';
           x.fillText(`${gateLabel} · ${Math.round(dist)} m`, sx, sy + rr + 18);
           // flank readouts, reference layout: speed left, altitude right
-          x.font = 'bold 17px monospace'; x.fillStyle = '#6effaa';
+          x.font = this.slimRecon ? 'bold 15px monospace' : 'bold 17px monospace'; x.fillStyle = '#6effaa';
           x.textAlign = 'right';
           x.fillText(`${Math.round(flight.speedKt)} KT`, sx - rr - 16, sy - 4);
-          x.font = 'bold 13px monospace';
+          x.font = this.slimRecon ? 'bold 12px monospace' : 'bold 13px monospace';
           x.fillText(`M ${mach.toFixed(2)}`, sx - rr - 16, sy + 16);
           x.fillText(`G ${flight.g.toFixed(1)}`, sx - rr - 16, sy + 34);
           x.textAlign = 'left';
-          x.font = 'bold 17px monospace';
+          x.font = this.slimRecon ? 'bold 15px monospace' : 'bold 17px monospace';
           x.fillText(`${Math.round(flight.altMslFt)} FT`, sx + rr + 16, sy - 4);
-          x.font = 'bold 13px monospace';
+          x.font = this.slimRecon ? 'bold 12px monospace' : 'bold 13px monospace';
           x.fillText(`FUEL ${Math.round(flight.fuel)}%`, sx + rr + 16, sy + 16);
         }
       }

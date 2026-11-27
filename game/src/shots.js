@@ -60,25 +60,25 @@ function duskLook(game) {
   game.lightning.auto = false;
 }
 
-// Ronde 3 (cockpit, ref-cockpit-round): BLUE-GREY DUSK SKY, shot-2
-// only. duskLook's golden palette turns the whole top of the frame RED
-// (orange horizon + pink mid + violet zenith + orange fog), but the
-// reference sky is blue-grey dusk with only a pale warm glow at the sun.
-// Override the dome uniforms, fog, key, hemi and cloud tint AFTER
-// duskLook, so the sun stays ahead-right low (the reference's sun at the
-// right edge) while the sky itself reads slate blue-grey. Called only
-// from the cockpit shot.
+// Ronde 4 (cockpit, Lyso: ronde 3 "tetep gagal", langit masih merah):
+// ronde 3's blue-grey override was still too warm — the horizon was a
+// warm taupe (0xcdbca6) and the mid a grey (0x93a3b8), so the whole
+// visible sky band read pale mauve/warm grey. Now the gradient is
+// decisively BLUE at every stop (deep slate zenith, clear blue mid,
+// cool pale-blue horizon) with the warm sun colour kept ONLY in the
+// sun disc + halo at the right edge, like the reference. Key + hemi
+// go neutral-cool so the snow walls stay white, not tan.
 function cockpitDuskSky(game) {
   const u = game.sky.uniforms;
-  u.uZenith.value.setHex(0x54627a);   // slate blue-grey zenith
-  u.uMid.value.setHex(0x93a3b8);      // pale blue-grey mid band
-  u.uHorizon.value.setHex(0xcdbca6);  // pale warm taupe at the horizon (sun glow only)
-  u.uSunColor.value.setHex(0xffe6bb); // paler sun halo
+  u.uZenith.value.setHex(0x3f5c7e);   // deep slate blue zenith
+  u.uMid.value.setHex(0x7d9cbd);      // clear blue mid band
+  u.uHorizon.value.setHex(0xb4c2d2);  // cool pale blue-grey horizon
+  u.uSunColor.value.setHex(0xffe6bb); // warm halo ONLY at the sun (right edge)
   u.uSunCore.value.setHex(0xfff9e2);
-  if (game.scene.fog) game.scene.fog.color.setHex(0x9fb0c4); // blue-grey fog, not orange
-  game.sky.key.color.setHex(0xfff3e0); // near-neutral pale key: snow reads white, not tan
-  game.sky.hemi.color.setHex(0x9db4d8);
-  game.sky.hemi.groundColor.setHex(0x707880);
+  if (game.scene.fog) game.scene.fog.color.setHex(0xa8bdd2); // cool blue-grey fog
+  game.sky.key.color.setHex(0xf2f6ff); // neutral-cool key: snow reads white
+  game.sky.hemi.color.setHex(0xa8c0e0);
+  game.sky.hemi.groundColor.setHex(0x6a7684);
   game.sky.hemi.intensity = 0.95;
   game.clouds.tint(0xe9eff5, 0xbcc9d8); // pale blue-grey clouds, not warm
 }
@@ -354,7 +354,7 @@ export const SHOTS = {
   cockpit(game) {
     game.setMission(1, { silent: true });
     duskLook(game);
-    cockpitDuskSky(game); // ronde 3: blue-grey dusk sky, not red
+    cockpitDuskSky(game); // ronde 4: decisively blue dusk sky, not warm/mauve
     // gate G-06 (index 5) is the ring in the windscreen: the plane sits
     // 160 m south of it, 20 m below its centre, so the ring reads big
     // (~250 px) and centred under the bow, FPV low inside it. G-06, not
@@ -420,7 +420,7 @@ export const SHOTS = {
     // recomputed from the chest after the group moves.
     const kaiju = game.missiles.targetById('KAIJU-1');
     kaiju.group.position.set(-380, 2, 1560);
-    kaiju.group.rotation.y = -1.0; // faces west-southwest toward ULTRA-1 AND the camera (was -1.26: jaw faced away, cyan unreadable)
+    kaiju.group.rotation.y = -0.7; // RONDE 5: -1.0 -> -0.7 — the mouth face was edge-on to the camera, foreshortening the jaw; -0.7 turns the face near-frontal while still facing west toward ULTRA-1
     kaiju.group.updateMatrixWorld(true);
     kaiju.pos.copy(kaiju.group.localToWorld(KAIJU_CHEST_LOCAL.clone())).add(new THREE.Vector3(0, 0, 18));
     const ultra = game.missiles.ultra;
@@ -500,11 +500,13 @@ export const SHOTS = {
     // between them
     game.setCameraMode('chase', { side: 0.3, dist: 45, height: 10 });
     game.hud.setMission(game.runner.mission, game.flight);
-    game.hud.showToast('ULTRA-1 — GUARDIAN OF LIGHT · ENERGY BLADE', 4000);
+    // RONDE 5: the ULTRA-1 toast is REMOVED — it ran horizontally
+    // across the frame and covered the kaiju's head. The boss bar at
+    // the top already names ULTRA-1, so nothing is lost.
     // burning wreck smoke + fire over the two warships
     addSmokeFire(game, [[-530, 1600], [-300, 1610]]);
     // re-assert the face-off rotations last (staging above must not move them)
-    kaiju.group.rotation.y = -1.0;
+    kaiju.group.rotation.y = -0.7; // RONDE 5, see above
     ultra.group.rotation.y = 1.0;
   },
 
@@ -543,6 +545,10 @@ export const SHOTS = {
 export function applyShot(name, game) {
   const fn = SHOTS[name];
   if (!fn) return false;
+  // Ronde 4: the cockpit shot uses the slim RECON ring (small, no ticks)
+  // so it never crowds the centre post again; every other shot keeps
+  // the full ring. Reset here so gameplay cockpit mode is unaffected.
+  if (game.cockpit) game.cockpit.slimRecon = name === 'cockpit';
   fn(game);
   game.shotMode = true;
   game.shotName = name;
