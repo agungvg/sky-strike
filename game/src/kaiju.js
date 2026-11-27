@@ -17,8 +17,19 @@ export const KAIJU_SCALE = 3;
 // computed from this in the missile system).
 export const KAIJU_CHEST_LOCAL = new THREE.Vector3(0, 28, 1);
 
-function mat(color, rough = 0.95, metal = 0.05) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true });
+function mat(color, rough = 0.95, metal = 0.05, emissive = 0.30) {
+  // ITERASI 3: self-lit hull. With no scene env-map, high-metalness
+  // standard materials render near-black in the storm shot, so every
+  // hull material carries its own colour as emissive — the gunmetal
+  // reads as gunmetal even where no key light reaches it. Emissive is
+  // a fraction of the base colour, so plates keep their shading and
+  // the silhouette keeps its dark/light contrast; it only lifts the
+  // floor out of black. Metalness stays LOW for the same reason.
+  // ITERASI 4: 0.38 -> 0.30 — the iterasi-3 frame rendered the hull
+  // FLAT LIGHT GREY (emissive + env 0.15 + storm key/fill washed the
+  // dark/light contrast out). 0.30 keeps the lift but lets the plates
+  // read gunmetal again, closer to the reference's dark mecha.
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true, emissive: color, emissiveIntensity: emissive });
 }
 
 function glowTexture(inner, outer) {
@@ -38,18 +49,17 @@ function glowTexture(inner, outer) {
 
 export function buildKaiju() {
   const g = new THREE.Group();
-  // MECHA plating: dark gunmetal hull, steel belly, near-black joints,
-  // polished-metal dorsal plates. The machine reads against the storm
-  // sky; the cyan jaw + red lights are the colour accents. Metalness
-  // kept LOW (<=0.35): with no env-map, high-metalness standard
-  // materials render near-black — the first storm pass proved it.
-  const skin = mat(0x4d565f, 0.45, 0.25); // gunmetal hull
-  const bellyMat = mat(0x5d6773, 0.5, 0.2); // steel belly
-  const ridgeMat = mat(0x2e343b, 0.5, 0.3); // dark joint plates
-  const spineMat = mat(0xb8bec8, 0.35, 0.35); // polished-metal plates/teeth
-  const dark = mat(0x1e242a, 0.5, 0.25);
+  // MECHA plating: LIGHTER gunmetal hull + LOW metalness so the plates
+  // read in the storm instead of going black. (Iterasi 2's 0x4d565f at
+  // metalness 0.25 and the 0.65-metal chest armor both rendered as a
+  // black silhouette in shot 3; the armor is the worst offender.)
+  const skin = mat(0x6b7683, 0.5, 0.12); // gunmetal hull, lightened
+  const bellyMat = mat(0x7d8894, 0.55, 0.1); // steel belly, lightened
+  const ridgeMat = mat(0x424b55, 0.55, 0.15); // joint plates, lightened
+  const spineMat = mat(0xc4cad4, 0.35, 0.2, 0.3); // polished-metal plates/teeth
+  const dark = mat(0x333c46, 0.55, 0.15); // joints, lightened from near-black
   const blueGlow = new THREE.MeshBasicMaterial({ color: 0x66f6ff }); // cyan tips
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff3a2a }); // red machine eyes
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xe5230f }); // red machine eyes, deepened (iterasi 4b: pure 0xff3a2a bloomed into an orange balloon)
 
   const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); g.add(mesh); return mesh; };
 
@@ -97,13 +107,13 @@ export function buildKaiju() {
     [-8.5, 20, 4.5], [8.5, 20, 4.5],
     [-5, 12, 7.5], [5, 12, 7.5],
   ]) {
-    const l = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), redLightMat);
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.7, 8, 6), redLightMat);
     add(l, x, y, z);
   }
 
   // bolted armor plates on the torso front
   for (const side of [-1, 1]) {
-    const armor = new THREE.Mesh(new THREE.BoxGeometry(4.5, 8, 0.8), mat(0x4a525c, 0.5, 0.65));
+    const armor = new THREE.Mesh(new THREE.BoxGeometry(4.5, 8, 0.8), mat(0x565f6b, 0.5, 0.2));
     armor.rotation.z = side * 0.12;
     add(armor, side * 3.4, 20, 8.8);
   }
@@ -129,37 +139,67 @@ export function buildKaiju() {
   add(head, 0, 39, 0);
   const snout = new THREE.Mesh(new THREE.BoxGeometry(3.5, 3, 4.5), bellyMat); // pale muzzle, reads against the dark head
   add(snout, 0, 38, 4.5);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.8, 4), dark);
-  jaw.rotation.x = 0.35; // hanging open, roaring
-  add(jaw, 0, 35.6, 4.2);
-  // cyan-glowing mouth interior (reference: the mecha's jaw burns cyan)
-  // + halo sprite so it reads from across the bay. ITERASI 2: dulu
-  // kotak 2.6 + flare 8 — nyaris tidak kelihatan karena rahang menghadap
-  // menjauhi kamera; sekarang 3.6 + flare 14, dan yaw shot diputar
-  // supaya rahang menghadap kamera.
-  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.6, 3.6), new THREE.MeshBasicMaterial({ color: 0x8ff8ff }));
-  add(jawGlow, 0, 36.9, 4.6);
-  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }));
-  jawFlare.scale.set(14, 14, 1);
-  add(jawFlare, 0, 36.9, 5.6);
+  // ITERASI 3 — the mouth was INVISIBLE: the old jawGlow box
+  // (3.6 x 1.6 x 3.6 at z 4.6) and both tooth rows sat INSIDE the
+  // snout box (z 2.25–6.75, y 36.5–39.5), so from the camera the head
+  // showed no cyan jaw at all. The whole mouth is now rebuilt ON the
+  // snout's front face (z 6.75): a dark cavity plate, a cyan glow
+  // plate standing proud of it, a lower jaw jutting forward below the
+  // snout, and both tooth rows in front of the glow so the teeth read
+  // silhouetted against cyan — a jaw, not a light blob.
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.2, 2.6), dark);
+  jaw.rotation.x = 0.3; // hanging open, roaring — chin juts forward
+  add(jaw, 0, 35.7, 5.6);
+  const mouthCavity = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 0.4), new THREE.MeshBasicMaterial({ color: 0x061014 }));
+  add(mouthCavity, 0, 37.0, 6.8);
+  // cyan-glowing mouth interior, standing proud of the dark cavity.
+  // ITERASI 4: the iterasi-3 plate (0x8ff8ff, near-white) + 11-unit
+  // flare rendered as a WHITE-HOT RECTANGLE — a light blob, not a
+  // jaw. The plate is now deeper cyan (0x35d8f2, still bright but
+  // unmistakably blue) and the flare is smaller/dimmer, so the mouth
+  // reads CYAN; the teeth (below) do the jaw reading.
+  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(2.9, 1.9, 0.5), new THREE.MeshBasicMaterial({ color: 0x35d8f2 }));
+  add(jawGlow, 0, 37.0, 7.0);
+  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false }));
+  jawFlare.scale.set(8, 8, 1);
+  add(jawFlare, 0, 37.0, 8.2);
   g.userData.jawGlow = jawGlow;
   for (const side of [-1, 1]) {
     const brow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 1.2), dark);
     add(brow, side * 1.8, 40.5, 2.8);
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(1.6, 8, 6), eyeMat);
-    add(eye, side * 1.8, 39.5, 3.5);
-    const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,80,60,1)', 'rgba(255,40,30,0.6)'), transparent: true, opacity: 0.85, depthWrite: false }));
-    eyeGlow.scale.set(5, 5, 1);
+    // ITERASI 4b: eyes 1.75 -> 1.25, set deeper (z 3.5 -> 3.1), deeper
+    // red — the iterasi-4 frame STILL showed one merged orange balloon:
+    // the culprit was never the glow sprites (already 2.6/0.55), it is
+    // the two big pure-red spheres themselves, projected on top of each
+    // other by the -1.0 shot yaw and fused by bloom. Smaller, deeper-set,
+    // deeper-red eyes read as two separate glowing dots, the reference look.
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(1.25, 8, 6), eyeMat);
+    add(eye, side * 1.8, 39.5, 3.1);
+    // ITERASI 3: eye glow 5 -> 3.6 — the old sprite merged into one
+    // big orange blob over the head; the eyes themselves now do the
+    // reading, the glow is just a halo.
+    // ITERASI 4: 3.6 -> 2.6, opacity 0.75 -> 0.55 — the iterasi-3
+    // frame STILL merged both glows into one orange balloon sitting
+    // on top of the head (the -1.0 yaw projects the eyes close
+    // together, and the sprites + bloom fuse them). Smaller/dimmer
+    // halos, so the two red eye spheres read as two eyes.
+    const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,80,60,1)', 'rgba(255,40,30,0.6)'), transparent: true, opacity: 0.55, depthWrite: false }));
+    eyeGlow.scale.set(2.6, 2.6, 1);
     add(eyeGlow, side * 1.8, 39.5, 4.6);
   }
-  for (let i = 0; i < 5; i++) { // upper teeth, pointing down
-    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.4, 6), spineMat);
+  // ITERASI 4: teeth are DARK now, not pale metal. The iterasi-3
+  // teeth (spineMat, near-white) vanished against the white-hot glow
+  // plate — white on white. Dark teeth silhouetted against the cyan
+  // plate read instantly as a jaw, which is the reference look
+  // (cyan maw, dark teeth).
+  for (let i = 0; i < 5; i++) { // upper teeth, pointing down, in FRONT of the glow
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 6), dark);
     tooth.rotation.x = Math.PI;
-    add(tooth, -1.6 + i * 0.8, 36.6, 6.2);
+    add(tooth, -1.6 + i * 0.8, 36.2, 7.0);
   }
-  for (let i = 0; i < 4; i++) { // lower teeth on the open jaw, pointing up
-    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.3, 6), spineMat);
-    add(tooth, -1.2 + i * 0.8, 36.8, 5.6);
+  for (let i = 0; i < 4; i++) { // lower teeth on the open jaw, pointing up, in FRONT of the glow
+    const tooth = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.5, 6), dark);
+    add(tooth, -1.2 + i * 0.8, 36.4, 6.9);
   }
 
   // dorsal spines: TWO layered rows, TALL so they crest above the back
@@ -191,23 +231,28 @@ export function buildKaiju() {
     addSpine(side * 8.5, 26, 2.5, 3.0, 1.4);
   }
 
-  // tail: thick, muscular, curving to the kaiju's right so it reads from
-  // the front (a straight-back tail hides behind the body). Muscle rings
-  // + spines on top.
+  // tail: thick, muscular, trailing BEHIND the body (local -Z, away
+  // from the camera) and curving slightly to the kaiju's left, low over
+  // the water. ITERASI 3: the old tail curved to local +X, which the
+  // -1.0 shot yaw swings toward the camera — its flat 8-segment
+  // cylinder end-caps + rings read as big grey octagon "rocks" at the
+  // bottom-right frame edge (a ~19 m disc at ~170 m ≈ 130 px). The new
+  // tail is tapered CONES, wide end forward into the body, apex
+  // trailing back-down into the water: no flat disc ever faces the
+  // camera, and no rings. A few small spines ride on top.
   const tailSegs = [
-    [4.0, 3.2, 11, 4, 9, -11, 0.8, -0.5],
-    [3.2, 2.2, 11, 12, 5, -19, 1.15, -0.6],
-    [2.2, 0.8, 10, 22, 3, -26, 1.4, -0.7],
+    // [radius, length, x, y, z, dirX, dirY, dirZ] — dir = apex direction
+    [3.6, 12, -1, 9, -12, -0.15, -0.25, -1],
+    [2.6, 11, -4, 6, -20, -0.25, -0.3, -1],
+    [1.6, 9, -8, 3.5, -27, -0.3, -0.35, -1],
   ];
-  for (const [rTop, rBot, h, x, y, z, rx, rz] of tailSegs) {
-    const seg = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, 8), skin);
-    seg.rotation.x = rx; seg.rotation.z = rz;
+  for (const [r, h, x, y, z, dx, dy, dz] of tailSegs) {
+    const seg = new THREE.Mesh(new THREE.ConeGeometry(r, h, 8), skin);
+    const dir = new THREE.Vector3(dx, dy, dz).normalize();
+    seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
     add(seg, x, y, z);
-    const ring = new THREE.Mesh(new THREE.CylinderGeometry(rTop + 0.15, rTop + 0.15, 0.8, 8), ridgeMat);
-    ring.rotation.x = rx; ring.rotation.z = rz;
-    add(ring, x, y + h * 0.3, z - h * 0.15);
   }
-  for (const [x, y, z] of [[6, 12, -12], [13, 8, -19], [20, 5, -24]]) {
+  for (const [x, y, z] of [[-1, 12.5, -12], [-4, 9, -20], [-8, 5.5, -27]]) {
     addSpine(x, y, z, 2.2, 1.1);
   }
 
@@ -261,6 +306,21 @@ export function buildKaiju() {
   g.add(breath);
   g.userData.breath = breath;
   g.userData.mecha = true; // flags the mecha rebuild for the selftest
+
+  // ---- self-lights (ITERASI 3): the model carries its own light so
+  // it reads in the storm even where the scene key/fill never reach.
+  // Physical falloff (decay 2): the key sits ~68 m (world) off the
+  // chest front, so 2500 cd lands ~0.5 on the plates — a lift, not a
+  // blowout — and spills a little cool light onto the jet's path too.
+  // The jaw light sits just off the snout and tints the muzzle cyan.
+  // Water is a ShaderMaterial, so these do NOT fix the black sea —
+  // that needs a sky/shots change (reported to parent).
+  const keyLight = new THREE.PointLight(0xbfd8ff, 2500, 500, 2);
+  keyLight.position.set(0, 32, 30);
+  g.add(keyLight);
+  const jawLight = new THREE.PointLight(0x66f6ff, 500, 150, 2);
+  jawLight.position.set(0, 37, 14);
+  g.add(jawLight);
 
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return { group: g };

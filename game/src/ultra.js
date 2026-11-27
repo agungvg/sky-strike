@@ -12,8 +12,12 @@ import * as THREE from 'three';
 
 export const ULTRA_HANDS_LOCAL = new THREE.Vector3(0, 25, 9);
 
-function mat(color, rough = 0.5, metal = 0.45) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true });
+function mat(color, rough = 0.5, metal = 0.45, emissive = 0.15) {
+  // ITERASI 3: same self-lit trick as the kaiju — a fraction of the
+  // base colour as emissive so the silver/red read in the storm
+  // instead of greying out where the key never reaches. Metalness cut
+  // (no env-map in the scene: high metal = black).
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true, emissive: color, emissiveIntensity: emissive });
 }
 
 function glowTexture(inner, outer) {
@@ -33,9 +37,16 @@ function glowTexture(inner, outer) {
 
 export function buildUltra() {
   const g = new THREE.Group();
-  const silver = mat(0xd8dce2, 0.45, 0.5);
-  const silverDark = mat(0x9aa2ac, 0.5, 0.45);
-  const red = mat(0xc22a1e, 0.5, 0.25);
+  const silver = mat(0xbfc5cd, 0.45, 0.35, 0.07);
+  const silverDark = mat(0x878e99, 0.5, 0.3, 0.07);
+  // ITERASI 4: silver emissive 0.15 -> 0.07 — the iterasi-3 frame blew
+  // the hero's head/shoulders out to FLAT WHITE (emissive + env 0.15
+  // + storm key/fill + bloom, no shading left). 0.07 keeps the silver
+  // readable while letting the key/fill model it again. Red keeps 0.2.
+  // ITERASI 4b: the wash survived the emissive cut — the cause is the
+  // base colour itself (0xd8dce2 is ~85% white under key 3.4 + fill
+  // 1.7). Silver darkened a notch so shaded faces stay grey, not white.
+  const red = mat(0xc22a1e, 0.5, 0.25, 0.2);
   const dark = mat(0x2a2e33, 0.6, 0.3);
   const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
   const timerMat = new THREE.MeshBasicMaterial({ color: 0x66d9ff });
@@ -92,8 +103,13 @@ export function buildUltra() {
   // the glowing blue energy blade, the other bent in guard across the
   // chest). Red bands on the upper arms. Model's right arm is side -1
   // (facing +Z, right = -X).
-  const bladeMat = new THREE.MeshBasicMaterial({ color: 0xaadfff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  const bladeHaloMat = new THREE.MeshBasicMaterial({ color: 0x2277ff, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  // ITERASI 4b: the core is now SOLID electric blue (normal blending,
+  // no additive). The iterasi-4 additive core (0x86c9ff) still washed
+  // to WHITE over the bright sea/sky — additive light on a bright
+  // background is always white. A thin solid-blue core reads blue
+  // against any background; the additive halo around it keeps the glow.
+  const bladeMat = new THREE.MeshBasicMaterial({ color: 0x35a0ff, side: THREE.DoubleSide });
+  const bladeHaloMat = new THREE.MeshBasicMaterial({ color: 0x2277ff, transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
   {
     const side = -1; // RIGHT arm: thrust forward, energy blade on the fist
     const sh = new THREE.Mesh(new THREE.SphereGeometry(2.8, 10, 8), silver);
@@ -111,14 +127,18 @@ export function buildUltra() {
     // bright blue core + deeper blue halo + pointed tip + base flare.
     // ITERASI 2: dulu core 2.4 tinggi kebaca PAPAN PUTIH — sekarang
     // 0.9 tipis + biru elektrik, jadi pedang energi, bukan papan.
+    // ITERASI 4: the iterasi-3 frame STILL read WHITE, not electric
+    // blue (core 0xcfeeff is near-white; halo was widened to 0.7).
+    // Core is now saturated light blue (0x86c9ff), halo thinned back
+    // to 0.5 wide and dimmed, tip narrowed — a thin blue blade.
     const blade = new THREE.Group();
     const core = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.9, 15), bladeMat);
     core.position.set(0, 0, 7.5);
-    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.55, 1.6, 15.5), bladeHaloMat);
+    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.3, 15.5), bladeHaloMat);
     halo.position.set(0, 0, 7.5);
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 4), bladeMat);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.6, 2.5, 4), bladeMat);
     tip.rotation.x = Math.PI / 2; // point forward (+Z)
-    tip.scale.set(0.25, 1, 1.4); // small sharp point, not a big arrowhead
+    tip.scale.set(0.2, 1, 1.4); // small sharp point, not a big arrowhead
     tip.position.set(0, 0, 16.2);
     const flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(190,230,255,1)', 'rgba(60,140,255,0.7)'),
@@ -129,6 +149,12 @@ export function buildUltra() {
     blade.position.set(side * 1.1, 24.8, 9.6);
     g.add(blade);
     g.userData.blade = blade;
+    // small blue spill light at the blade's midpoint: tints the fist
+    // and forearm blue so the blade feels like a light source, not a
+    // pasted shard. 40 cd at ~15 m (world) off the arm ≈ 0.2 — subtle.
+    const bladeLight = new THREE.PointLight(0x55aaff, 40, 80, 2);
+    bladeLight.position.set(side * 1.1, 24.8, 17);
+    g.add(bladeLight);
   }
   {
     const side = 1; // LEFT arm: bent guard across the chest
@@ -160,14 +186,17 @@ export function buildUltra() {
   const jaw = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.6), dark);
   add(jaw, 0, 31.8, 2.2);
   for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.95, 8, 6), eyeMat);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(1.05, 8, 6), eyeMat);
     eye.scale.set(1.25, 0.7, 0.6);
     add(eye, side * 1.35, 34.2, 2.3);
     const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({
       map: glowTexture('rgba(255,242,176,1)', 'rgba(255,200,60,0.6)'),
-      transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false,
+      transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false,
     }));
-    eyeGlow.scale.set(4.5, 4.5, 1);
+    // ITERASI 4: 4.5 -> 3.4 — the iterasi-3 frame washed the hero's
+    // whole head white; the big eye halos were part of it. Smaller
+    // halos, eyes still glow.
+    eyeGlow.scale.set(3.4, 3.4, 1);
     add(eyeGlow, side * 1.35, 34.2, 3.0);
   }
 
