@@ -13,7 +13,8 @@ import { clamp } from './random.js';
 
 // ULTRA-1's beach position: WEST of the kaiju, between the jet's
 // attack run and the boss — from the chase camera he stands left of
-// frame, beaming right across the kaiju's chest. Wading in the shallows.
+// frame, energy blade forward toward the kaiju's chest. Wading in the
+// shallows. (The shot preset moves both giants closer for the face-off.)
 export const ULTRA_POS = new THREE.Vector3(-480, 2, 1520);
 export const ULTRA_YAW = 2.06; // faces the kaiju at (-350, 1450)
 
@@ -77,7 +78,8 @@ export class MissileSystem {
     }
     this.kaiju = this.targetById('KAIJU-1');
     // ULTRA-1: the ally giant. NOT a target — never lockable, never
-    // scored — he stands on the beach and beams the kaiju whenever the
+    // scored — he stands on the beach and fights the kaiju (energy blade;
+    // the beam is still aimed in gameplay) whenever the
     // boss sortie is active. Hidden everywhere else (cover / cockpit /
     // map frames must not leak him).
     const ultraBuilt = buildUltra();

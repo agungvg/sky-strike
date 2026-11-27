@@ -1,8 +1,9 @@
 // ULTRA-1 — "GUARDIAN OF LIGHT". A giant hero of silver and red
 // fighting KAIJU-1 on the beach: silver body, red chest V and crest fin,
-// glowing eyes, and a blue Color Timer pulsing on his chest. He fires a
-// white-blue light beam (Specium-style, crossed forearms) at the kaiju
-// while the Falcon-7 puts missiles into it. The look is inspired by the
+// glowing eyes, and a blue Color Timer pulsing on his chest. Fighting
+// pose (reference: one arm forward) with a glowing blue ENERGY BLADE on
+// his right forearm; the old crossed-forearm light beam is still built
+// for gameplay, but shot 3 shows the blade. The look is inspired by the
 // classic silver giant, but no trademarked name appears anywhere in the
 // game text — the HUD calls him ULTRA-1 / GUARDIAN OF LIGHT.
 // Built at ~40 m tall in local units (same scale family as the kaiju);
@@ -41,7 +42,7 @@ export function buildUltra() {
 
   const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); g.add(mesh); return mesh; };
 
-  // legs: silver columns + red boots
+  // legs: silver columns + red boots + shin guards + red side stripes
   for (const side of [-1, 1]) {
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(2.0, 2.4, 12, 8), silver);
     add(leg, side * 2.8, 7, 0);
@@ -49,6 +50,8 @@ export function buildUltra() {
     add(boot, side * 2.8, 1.3, 0.8);
     const knee = new THREE.Mesh(new THREE.SphereGeometry(1.6, 8, 6), silverDark);
     add(knee, side * 2.8, 12.5, 0.8);
+    const shin = new THREE.Mesh(new THREE.BoxGeometry(2.4, 5.5, 0.9), silverDark);
+    add(shin, side * 2.8, 6.5, 2.3);
   }
   // hips + torso: tapered silver trunk
   const hips = new THREE.Mesh(new THREE.CylinderGeometry(6.0, 6.8, 4, 10), silverDark);
@@ -85,9 +88,14 @@ export function buildUltra() {
   add(timerGlow, 0, 24.5, 7.2);
   g.userData.timerGlow = timerGlow;
 
-  // shoulders + arms: both forearms thrust forward, hands together —
-  // the beam pose. Red bands on the upper arms.
-  for (const side of [-1, 1]) {
+  // shoulders + arms — FIGHTING POSE (reference: one arm forward with
+  // the glowing blue energy blade, the other bent in guard across the
+  // chest). Red bands on the upper arms. Model's right arm is side -1
+  // (facing +Z, right = -X).
+  const bladeMat = new THREE.MeshBasicMaterial({ color: 0xdff4ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const bladeHaloMat = new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  {
+    const side = -1; // RIGHT arm: thrust forward, energy blade on the fist
     const sh = new THREE.Mesh(new THREE.SphereGeometry(2.8, 10, 8), silver);
     add(sh, side * 6.8, 27.5, 0);
     const band = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 1.4, 8), red);
@@ -95,15 +103,57 @@ export function buildUltra() {
     add(band, side * 6.2, 26.5, 2.2);
     const arm = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.45, 10, 8), silver);
     arm.rotation.x = Math.PI / 2 - 0.28; // forward, slightly down
-    arm.rotation.z = side * 0.18; // angled inward so the hands meet
+    arm.rotation.z = side * 0.18; // angled inward
     add(arm, side * 3.4, 25.5, 4.6);
     const fist = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.0, 2.4), silverDark);
     add(fist, side * 1.1, 24.8, 8.6);
+    // energy blade: flat glowing blade jutting forward from the fist —
+    // bright core + blue halo + pointed tip + base flare. The blade is
+    // the shot's focal weapon (the old beam is hidden in shot 3).
+    const blade = new THREE.Group();
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.4, 15), bladeMat);
+    core.position.set(0, 0, 7.5);
+    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.9, 3.4, 15.5), bladeHaloMat);
+    halo.position.set(0, 0, 7.5);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(1.2, 4, 4), bladeMat);
+    tip.rotation.x = Math.PI / 2; // point forward (+Z)
+    tip.scale.set(0.3, 1, 1.8); // flatten: a blade point, not a spike
+    tip.position.set(0, 0, 16.5);
+    const flare = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture('rgba(190,230,255,1)', 'rgba(60,140,255,0.7)'),
+      transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    flare.scale.set(7, 7, 1);
+    blade.add(core, halo, tip, flare);
+    blade.position.set(side * 1.1, 24.8, 9.6);
+    g.add(blade);
+    g.userData.blade = blade;
+  }
+  {
+    const side = 1; // LEFT arm: bent guard across the chest
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(2.8, 10, 8), silver);
+    add(sh, side * 6.8, 27.5, 0);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 1.4, 8), red);
+    band.rotation.x = Math.PI / 2 - 0.25;
+    add(band, side * 6.2, 26.5, 2.2);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.45, 9, 8), silver);
+    arm.rotation.x = Math.PI / 2 - 1.05; // bent up toward the chest
+    arm.rotation.z = -side * 0.4; // angled inward across the body
+    add(arm, side * 4.6, 24.2, 3.6);
+    const fist = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.0, 2.4), silverDark);
+    add(fist, side * 2.6, 23.0, 6.4);
   }
 
-  // head: silver, red crest fin, glowing eyes, small dark mouth line
+  // head: silver, tapered cranium + red crest fin + red ear fins,
+  // glowing eyes, small dark mouth line
   const head = new THREE.Mesh(new THREE.BoxGeometry(4.2, 4.6, 4.4), silver);
   add(head, 0, 33.5, 0);
+  const cranium = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.4, 3.6), silver);
+  add(cranium, 0, 36.2, -0.2);
+  for (const side of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.0, 2.6), red);
+    add(ear, side * 2.25, 34.5, 0);
+  }
   const crest = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.6, 5.2), red);
   add(crest, 0, 36.4, -0.2);
   const jaw = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.9, 0.6), dark);

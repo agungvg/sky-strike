@@ -1,8 +1,10 @@
-// KAIJU-1 — the sea boss. A giant low-poly kaiju rising from the bay off
-// the coast: huge torso with scale ridges, a layered dorsal spine row
-// with glowing blue tips, head with snout + glowing eyes + teeth, a
+// KAIJU-1 — the sea boss, rebuilt as a MECHA-KAIJU (reference: dark
+// gunmetal plates, cyan-glowing jaw, red lights on the hull, sharp metal
+// teeth, metal dorsal plates). A giant machine rising from the bay off
+// the coast: huge torso with armor plates, a layered dorsal plate row
+// with glowing cyan tips, head with snout + glowing red eyes + teeth, a
 // muscular tail trailing into the water, and a blue atomic breath arcing
-// from its mouth toward the sky. Built from the same flat-shaded
+// from its cyan jaw toward ULTRA-1. Built from the same flat-shaded
 // primitives as the rest of the game (cylinders, boxes, cones, spheres) —
 // no realistic model, the silhouette does the work. The group origin is
 // the waterline; the model faces local +Z. Built at ~43 m, the group is
@@ -15,8 +17,8 @@ export const KAIJU_SCALE = 3;
 // computed from this in the missile system).
 export const KAIJU_CHEST_LOCAL = new THREE.Vector3(0, 28, 1);
 
-function mat(color, rough = 0.95) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.05, flatShading: true });
+function mat(color, rough = 0.95, metal = 0.05) {
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal, flatShading: true });
 }
 
 function glowTexture(inner, outer) {
@@ -36,13 +38,18 @@ function glowTexture(inner, outer) {
 
 export function buildKaiju() {
   const g = new THREE.Group();
-  const skin = mat(0x6f8a58);        // moss green, brightened for the v4 day scene (was 0x5c6e4e: too dark against the bright sea)
-  const bellyMat = mat(0x9ab078);    // pale belly
-  const ridgeMat = mat(0x3a4a34);    // dark scale ridges / scutes
-  const spineMat = mat(0xd8d4c0, 0.8); // pale bone spines
-  const dark = mat(0x2e3a2a);
-  const blueGlow = new THREE.MeshBasicMaterial({ color: 0x99e2ff });
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffe08a });
+  // MECHA plating: dark gunmetal hull, steel belly, near-black joints,
+  // polished-metal dorsal plates. The machine reads against the storm
+  // sky; the cyan jaw + red lights are the colour accents. Metalness
+  // kept LOW (<=0.35): with no env-map, high-metalness standard
+  // materials render near-black — the first storm pass proved it.
+  const skin = mat(0x4d565f, 0.45, 0.25); // gunmetal hull
+  const bellyMat = mat(0x5d6773, 0.5, 0.2); // steel belly
+  const ridgeMat = mat(0x2e343b, 0.5, 0.3); // dark joint plates
+  const spineMat = mat(0xb8bec8, 0.35, 0.35); // polished-metal plates/teeth
+  const dark = mat(0x1e242a, 0.5, 0.25);
+  const blueGlow = new THREE.MeshBasicMaterial({ color: 0x66f6ff }); // cyan tips
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff3a2a }); // red machine eyes
 
   const add = (mesh, x, y, z) => { mesh.position.set(x, y, z); g.add(mesh); return mesh; };
 
@@ -81,6 +88,26 @@ export function buildKaiju() {
     add(plate, side * 7, 26, 4.5);
   }
 
+  // red hull lights (reference: the mecha is studded with red lamps)
+  // chest + shoulders + forearms + hips
+  const redLightMat = new THREE.MeshBasicMaterial({ color: 0xff2a22 });
+  for (const [x, y, z] of [
+    [-3.5, 28, 7.2], [3.5, 28, 7.2],
+    [-7.5, 30, 2.5], [7.5, 30, 2.5],
+    [-8.5, 20, 4.5], [8.5, 20, 4.5],
+    [-5, 12, 7.5], [5, 12, 7.5],
+  ]) {
+    const l = new THREE.Mesh(new THREE.SphereGeometry(0.55, 8, 6), redLightMat);
+    add(l, x, y, z);
+  }
+
+  // bolted armor plates on the torso front
+  for (const side of [-1, 1]) {
+    const armor = new THREE.Mesh(new THREE.BoxGeometry(4.5, 8, 0.8), mat(0x4a525c, 0.5, 0.65));
+    armor.rotation.z = side * 0.12;
+    add(armor, side * 3.4, 20, 8.8);
+  }
+
   // shoulders + short arms with claws
   for (const side of [-1, 1]) {
     const sh = new THREE.Mesh(new THREE.SphereGeometry(3.2, 10, 8), skin);
@@ -105,12 +132,20 @@ export function buildKaiju() {
   const jaw = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.8, 4), dark);
   jaw.rotation.x = 0.35; // hanging open, roaring
   add(jaw, 0, 35.6, 4.2);
+  // cyan-glowing mouth interior (reference: the mecha's jaw burns cyan)
+  // + halo sprite so it reads from across the bay
+  const jawGlow = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 3.0), new THREE.MeshBasicMaterial({ color: 0x66f6ff }));
+  add(jawGlow, 0, 36.9, 4.6);
+  const jawFlare = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(120,246,255,1)', 'rgba(40,180,255,0.6)'), transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+  jawFlare.scale.set(8, 8, 1);
+  add(jawFlare, 0, 36.9, 5.6);
+  g.userData.jawGlow = jawGlow;
   for (const side of [-1, 1]) {
     const brow = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1, 1.2), dark);
     add(brow, side * 1.8, 40.5, 2.8);
     const eye = new THREE.Mesh(new THREE.SphereGeometry(1.6, 8, 6), eyeMat);
     add(eye, side * 1.8, 39.5, 3.5);
-    const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,224,138,1)', 'rgba(255,180,60,0.6)'), transparent: true, opacity: 0.85, depthWrite: false }));
+    const eyeGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture('rgba(255,80,60,1)', 'rgba(255,40,30,0.6)'), transparent: true, opacity: 0.85, depthWrite: false }));
     eyeGlow.scale.set(5, 5, 1);
     add(eyeGlow, side * 1.8, 39.5, 4.6);
   }
@@ -179,27 +214,31 @@ export function buildKaiju() {
   // the missile system hides it unless the boss is active or locked.
   const breath = new THREE.Group();
   const mouth = new THREE.Vector3(0, 37.5, 6.8);
-  const dir = new THREE.Vector3(0.19, 0.56, 0.81).normalize();
-  const beamLen = 50;
+  // up and leaning toward ULTRA-1: in the face-off the kaiju's yaw
+  // turns a forward breath into a giant diagonal across the frame, so
+  // the breath climbs instead of crossing. SHORT (14) and fat — a plume
+  // of flame above the jaw, not a skyscraper laser.
+  const dir = new THREE.Vector3(-0.35, 0.8, 0.3).normalize();
+  const beamLen = 14;
   const blueTex = glowTexture('rgba(190,230,255,1)', 'rgba(40,140,255,0.7)');
   const orient = (mesh) => {
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   };
   const core = new THREE.Mesh(
     new THREE.CylinderGeometry(0.7, 1.0, beamLen, 8),
-    new THREE.MeshBasicMaterial({ color: 0xd8f2ff, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0xd8f2ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   orient(core);
   core.position.copy(mouth).addScaledVector(dir, beamLen / 2);
   const outer = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.9, 2.6, beamLen, 8),
-    new THREE.MeshBasicMaterial({ color: 0x3399ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.CylinderGeometry(3.2, 4.5, beamLen, 8),
+    new THREE.MeshBasicMaterial({ color: 0x22aaff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   orient(outer);
   outer.position.copy(mouth).addScaledVector(dir, beamLen / 2);
   const tip = new THREE.Mesh(
     new THREE.ConeGeometry(2.4, 9, 8),
-    new THREE.MeshBasicMaterial({ color: 0x66bbff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ color: 0x55ccff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false }),
   );
   orient(tip);
   tip.position.copy(mouth).addScaledVector(dir, beamLen + 4);
@@ -218,6 +257,7 @@ export function buildKaiju() {
   breath.visible = false; // shown only when the boss is active / locked
   g.add(breath);
   g.userData.breath = breath;
+  g.userData.mecha = true; // flags the mecha rebuild for the selftest
 
   g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
   return { group: g };
