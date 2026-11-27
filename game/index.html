@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sky Strike — 3D Fighter Jet Simulator</title>
+<style>
+  :root {
+    --amber: #ffd76a; --amber-dim: #ffb020; --ink: #e8e4d8;
+    --panel: rgba(8, 10, 16, 0.72); --panel-border: rgba(255, 190, 90, 0.55);
+    --danger: #ff5040; --ok: #3ddc84; --cyan: #7ee8ff; --ab: #7ab8ff;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #14100e;
+    font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+  #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; inset: 0; pointer-events: none; color: var(--ink); z-index: 7; }
+  /* In cockpit mode the panel carries fuel/throttle, so the HUD's bottom
+     bars and radar step aside; the tapes and mission panel stay. */
+  body.cockpit-mode .hud-sys, body.cockpit-mode .hud-radar, body.cockpit-mode .hud-vsi { display: none; }
+  .hud-panel { position: absolute; background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 6px; padding: 8px 12px; }
+  .hud-mission { top: 10px; left: 10px; min-width: 280px; }
+  .hud-title { color: var(--amber); font-weight: bold; font-size: 15px; letter-spacing: 1px; }
+  .hud-mission-name { font-size: 13px; margin-top: 3px; color: #fff; }
+  .hud-sub { font-size: 12px; color: var(--amber-dim); margin-top: 2px; }
+  .hud-hdg { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); text-align: center; }
+  .hud-hdg canvas { display: block; }
+  .hud-hdg-box { display: inline-block; background: var(--panel); border: 1px solid var(--amber);
+    color: var(--amber); font-weight: bold; font-size: 13px; padding: 2px 10px; border-radius: 4px; margin-top: 2px; }
+  .hud-state { top: 10px; right: 10px; font-size: 13px; color: var(--amber); font-weight: bold; }
+  .hud-storm { top: 58px; right: 10px; text-align: center; min-width: 170px; }
+  .hud-storm-title { font-size: 12px; letter-spacing: 2px; color: #fff; }
+  .hud-storm-eta { font-size: 34px; font-weight: bold; color: #ff6a50; line-height: 1.05; }
+  .hud-storm-bar { height: 8px; background: rgba(255,255,255,0.15); border-radius: 4px; margin: 4px 0; overflow: hidden; }
+  .hud-storm-fill { height: 100%; background: linear-gradient(90deg, #ff5040, #ffb020); width: 100%; }
+  .hud-storm-dist { font-size: 11px; color: var(--amber-dim); }
+  .hud-boss { top: 116px; left: 50%; transform: translateX(-50%); width: 340px; text-align: center; padding: 6px 12px; }
+  .hud-boss-name { font-size: 12px; font-weight: bold; letter-spacing: 2px; color: #fff; }
+  .hud-boss-bar { height: 10px; background: rgba(255,255,255,0.15); border-radius: 5px; margin: 5px 0 2px; overflow: hidden; }
+  .hud-boss-fill { height: 100%; background: linear-gradient(90deg, #ff5040, #ffb020); width: 100%; }
+  .hud-boss-pct { font-size: 11px; font-weight: bold; color: #ff6a50; }
+  .hud-chips { position: absolute; top: 86px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+  .hud-chip { display: none; font-size: 12px; font-weight: bold; padding: 3px 10px; border-radius: 4px;
+    background: rgba(8,10,16,0.8); border: 1px solid #888; color: #ddd; }
+  .hud-chip.warn { border-color: #ffb020; color: #ffb020; }
+  .hud-chip.danger { border-color: var(--danger); color: var(--danger); animation: blink 0.7s steps(2) infinite; }
+  .hud-chip.ok { border-color: var(--ok); color: var(--ok); }
+  @keyframes blink { 50% { opacity: 0.45; } }
+  .hud-tape { position: absolute; top: 190px; text-align: center; }
+  .hud-spd { left: 12px; } .hud-alt { right: 12px; }
+  .hud-tape-label { font-size: 10px; letter-spacing: 2px; color: var(--amber-dim); margin-bottom: 2px; }
+  .hud-tape canvas { display: block; }
+  .hud-tape-box { display: inline-block; background: var(--panel); border: 1px solid var(--amber);
+    color: #fff; font-weight: bold; font-size: 15px; padding: 2px 8px; border-radius: 4px; margin-top: 2px; }
+  .hud-vsi { position: absolute; right: 12px; top: 460px; background: var(--panel); border: 1px solid var(--panel-border);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--ink); white-space: pre-line; line-height: 1.5; }
+  .hud-sys { left: 10px; bottom: 10px; min-width: 240px; }
+  .hud-bar-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .hud-bar-label { width: 74px; font-size: 11px; color: var(--amber-dim); }
+  .hud-bar { flex: 1; height: 10px; background: rgba(255,255,255,0.14); border-radius: 5px; overflow: hidden; }
+  .hud-bar-fill { height: 100%; background: var(--amber); width: 50%; }
+  .hud-bar-val { width: 38px; text-align: right; font-size: 11px; color: #fff; }
+  .hud-gear-row { display: flex; gap: 6px; margin-top: 6px; }
+  .hud-mini-chip { font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px;
+    background: rgba(255,255,255,0.1); color: #ccc; border: 1px solid rgba(255,255,255,0.25); }
+  .hud-mini-chip.ok { color: var(--ok); border-color: var(--ok); }
+  .hud-mini-chip.warn { color: #ffb020; border-color: #ffb020; }
+  .hud-mini-chip.danger { color: var(--danger); border-color: var(--danger); }
+  .hud-radar { position: absolute; right: 12px; bottom: 12px; text-align: center; }
+  .hud-radar-label { font-size: 10px; letter-spacing: 2px; color: var(--amber-dim); margin-top: 2px; }
+  .hud-fpv { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .hud-gate-label { position: absolute; transform: translate(-50%, -50%); color: var(--amber);
+    font-size: 13px; font-weight: bold; text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,0.8); white-space: nowrap; }
+  /* missile lock diamond + range text */
+  .hud-lock { position: absolute; border: 2px solid #ffb020; transform: rotate(45deg); pointer-events: none; }
+  .hud-lock.locked { border-color: var(--danger); box-shadow: 0 0 12px rgba(255,80,64,0.7); animation: blink 0.5s steps(2) infinite; }
+  .hud-lock-text { position: absolute; transform: translateX(-50%); color: #ffb020; font-size: 13px; font-weight: bold;
+    text-shadow: 0 1px 2px #000, 0 0 6px rgba(0,0,0,0.8); white-space: nowrap; }
+  .hud-toast { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 22px; font-weight: bold;
+    color: var(--amber); text-shadow: 0 2px 4px #000; opacity: 0; transition: opacity 0.3s; }
+
+  /* ---------- Cockpit ---------- */
+  .cockpit { position: fixed; inset: 0; pointer-events: none; z-index: 6; }
+  .cockpit-frame { position: absolute; inset: 0; }
+  .cockpit-frame svg { width: 100%; height: 100%; display: block; }
+  .cockpit-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 248px;
+    background: linear-gradient(180deg, #171c24 0%, #0d1015 100%);
+    border-top: 3px solid #2c3540; display: flex; align-items: flex-start; padding: 10px 18px 0; gap: 14px; }
+  .cockpit-gauges { flex: 0 0 auto; margin-top: 26px; }
+  .cockpit-tgt { position: absolute; top: 6px; right: 18px; display: flex; gap: 14px; align-items: center;
+    font-size: 12px; font-weight: bold; color: #ffb020; }
+  .cockpit-tgt .tgt-name { color: #fff; }
+  .cockpit-tgt .tgt-lock.on { color: var(--ok); }
+  .cockpit-tgt .tgt-shoot { display: none; color: var(--danger); border: 1px solid var(--danger);
+    padding: 1px 8px; border-radius: 3px; animation: blink 0.5s steps(2) infinite; }
+  .cockpit-switches { position: absolute; top: 6px; left: 18px; right: 340px; display: flex; gap: 10px; }
+  .cockpit-switch { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #8a94a3; }
+  .cockpit-switch .sw-dot { width: 9px; height: 9px; border-radius: 50%; background: #333; border: 1px solid #555; }
+  .cockpit-switch.lit .sw-dot { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
+  .cockpit-switch.lit { color: #d8e8d8; }
+  .cockpit-yoke { position: absolute; left: 50%; bottom: -46px; transform: translateX(-50%); width: 180px; opacity: 0.95; }
+  .cockpit-quadrant { margin-left: auto; margin-top: 30px; text-align: center; color: var(--amber-dim); font-size: 11px; }
+  .cq-levers { display: flex; gap: 16px; margin-top: 6px; }
+  .cq-lever { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .cq-track { width: 14px; height: 110px; background: #0a0d12; border: 1px solid #3a4552; border-radius: 7px; position: relative; }
+  .cq-knob { position: absolute; left: -4px; width: 20px; height: 14px; background: #e85d10; border-radius: 3px; bottom: 50%; }
+  .cockpit-chips { position: absolute; bottom: 12px; right: 18px; display: flex; flex-direction: row; gap: 6px; align-items: flex-end; }
+
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, rgba(20,14,30,0.42), rgba(10,8,18,0.62)); }
+  .screen.hidden { display: none; }
+  .card { background: rgba(10, 12, 20, 0.88); border: 1px solid var(--panel-border); border-radius: 10px;
+    padding: 26px 32px; max-width: 860px; width: min(92vw, 860px); color: var(--ink); }
+  .card h1 { margin: 0; color: var(--amber); font-size: 42px; letter-spacing: 4px; }
+  .card h2 { margin: 0 0 4px; color: var(--amber); font-size: 26px; letter-spacing: 2px; }
+  .card .sub { color: var(--cyan); font-size: 14px; letter-spacing: 1px; margin-bottom: 14px; }
+  .card p { font-size: 14px; line-height: 1.6; color: #d8d4c8; }
+  .btn-row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  button { font-family: inherit; font-size: 14px; font-weight: bold; letter-spacing: 1px; cursor: pointer;
+    background: #c22e24; color: #fff; border: 1px solid #ff8a7a; border-radius: 6px; padding: 10px 18px; }
+  button.secondary { background: rgba(255,255,255,0.08); color: var(--amber); border-color: var(--panel-border); }
+  button:hover { filter: brightness(1.15); }
+  .controls { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 13px; margin-top: 12px; }
+  .controls b { color: var(--amber); font-weight: bold; }
+  .mission-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .mission-row { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 6px; cursor: pointer; background: rgba(255,255,255,0.04); }
+  .mission-row:hover { border-color: var(--amber); }
+  .mission-row.selected { border-color: var(--amber); background: rgba(255, 176, 32, 0.12); }
+  .mission-row .num { font-size: 20px; font-weight: bold; color: var(--amber); width: 34px; }
+  .mission-row .nm { flex: 1; }
+  .mission-row .nm .t { font-size: 14px; font-weight: bold; color: #fff; }
+  .mission-row .nm .d { font-size: 11px; color: #aaa; }
+  .mission-row .stars { color: var(--amber); font-size: 15px; letter-spacing: 2px; }
+  .mission-row.locked { opacity: 0.45; }
+  .map-wrap { display: flex; gap: 18px; }
+  .map-wrap canvas { border: 1px solid var(--panel-border); border-radius: 8px; background: #1a2416; }
+  .map-side { flex: 1; min-width: 0; }
+  .debrief-grade { font-size: 64px; font-weight: bold; color: var(--amber); text-align: center; line-height: 1; }
+  .debrief-stars { text-align: center; color: var(--amber); font-size: 22px; letter-spacing: 6px; margin: 6px 0 12px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr auto; gap: 6px 20px; font-size: 14px; margin: 10px 0; }
+  .stat-grid .k { color: #aaa; letter-spacing: 1px; }
+  .stat-grid .v { color: #fff; font-weight: bold; text-align: right; }
+  .pilot-card { margin-top: 14px; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; font-size: 13px; }
+  .pilot-card b { color: var(--amber); }
+  .kbd-hint { position: fixed; left: 10px; bottom: 10px; z-index: 7; color: rgba(232,228,216,0.75); font-size: 11px;
+    background: rgba(8,10,16,0.55); padding: 4px 8px; border-radius: 4px; pointer-events: none; }
+  .kbd-hint.hidden { display: none; }
+  /* Shot 4: map card left, debrief card right, live dusk scene behind both. */
+  .screen.side { justify-content: flex-end; background: transparent; pointer-events: none; }
+  .screen.side .card { max-width: 420px !important; margin-right: 16px; padding: 18px 20px; pointer-events: auto; }
+  .screen.side .debrief-grade { font-size: 48px; }
+  .screen.shift-left { justify-content: flex-start; }
+  .screen.shift-left .card { max-width: 700px; margin-left: 16px; padding: 18px 20px; }
+  .screen.shift-left #map-canvas { width: 300px; height: 364px; }
+</style>
+</head>
+<body>
+<canvas id="scene" aria-label="Sky Strike: fly the Falcon-7 fighter jet over the coastal range"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="hud"></div>
+<div id="cockpit"></div>
+<div class="kbd-hint" id="hint">W/S PITCH · A/D ROLL · SHIFT/CTRL THROTTLE · F FLAPS · G GEAR · C CAMERA · SPACE FIRE MISSILE · H HELP · P PAUSE</div>
+
+<!-- MENU -->
+<div class="screen" id="menu-screen">
+  <div class="card">
+    <h1>SKY STRIKE</h1>
+    <div class="sub">3D FIGHTER JET SIMULATOR · FALCON-7 · COASTAL RANGE, GOLDEN HOUR</div>
+    <p>Fly the Falcon-7 fighter over the coastal range: thread gold gates, land
+    soft on RWY 36, lock warships and mountain radar towers in the diamond
+    and send them down with a missile, beat the storm front, climb above the
+    clouds on afterburner, and hunt by night. Smooth flying scores — hard
+    banks cost G, fuel and hull are real, every kill is +1000, and every
+    landing is graded.</p>
+    <div class="controls">
+      <b>W / S</b><span>pitch down / up (mouse drag also steers)</span>
+      <b>A / D</b><span>bank left / right</span>
+      <b>SHIFT / CTRL</b><span>throttle up / down (past 92% = afterburner)</span>
+      <b>F · G</b><span>flaps · landing gear</span>
+      <b>C</b><span>chase / cockpit camera</span>
+      <b>SPACE</b><span>fire missile at the locked target (hold it in the diamond first)</span>
+      <b>P · H · M</b><span>pause · help · mute</span>
+    </div>
+    <div class="btn-row">
+      <button id="btn-fly">FLY NEXT SORTIE</button>
+      <button class="secondary" id="btn-map">CAMPAIGN MAP</button>
+      <button class="secondary" id="btn-help">HOW TO FLY</button>
+    </div>
+    <div class="pilot-card" id="menu-pilot">PILOT <b>LYSO — "SKY STRIKE"</b> · FALCON-7 · STARS <b id="menu-stars">0 / 18</b> · SORTIES FLOWN <b id="menu-flown">0</b></div>
+  </div>
+</div>
+
+<!-- CAMPAIGN MAP -->
+<div class="screen hidden" id="map-screen">
+  <div class="card">
+    <h2>SKY STRIKE — CAMPAIGN MAP</h2>
+    <div class="sub">COASTAL RANGE · 6 SORTIES · WARSHIPS + RADAR TOWERS MARKED RED</div>
+    <div class="map-wrap">
+      <canvas id="map-canvas" width="380" height="460"></canvas>
+      <div class="map-side">
+        <div class="mission-list" id="mission-list"></div>
+        <div class="pilot-card">PILOT <b>LYSO — "SKY STRIKE"</b> · STARS <b id="map-stars">0 / 18</b><br>
+        RULE · <b>MAX 6.0 G</b> — OVER-G DAMAGES THE AIRFRAME · FUEL IS REAL · KILLS +1000</div>
+        <div class="btn-row">
+          <button id="btn-map-fly">FLY SELECTED</button>
+          <button class="secondary" id="btn-map-close">CLOSE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DEBRIEF -->
+<div class="screen hidden" id="debrief-screen">
+  <div class="card" style="max-width: 560px;">
+    <h2 style="text-align:center;" id="debrief-title">TOUCHDOWN CONFIRMED — SORTIE COMPLETE</h2>
+    <div class="sub" style="text-align:center;" id="debrief-sub">COASTAL LANDING // FALCON-7</div>
+    <div class="debrief-grade" id="debrief-grade">S</div>
+    <div class="debrief-stars" id="debrief-stars">★★★</div>
+    <div class="stat-grid" id="debrief-stats"></div>
+    <div class="btn-row" style="justify-content:center;">
+      <button id="btn-next">NEXT SORTIE</button>
+      <button class="secondary" id="btn-again">FLY AGAIN</button>
+      <button class="secondary" id="btn-debrief-map">MAP</button>
+    </div>
+  </div>
+</div>
+
+<!-- CRASH / FAILED -->
+<div class="screen hidden" id="crash-screen">
+  <div class="card" style="max-width: 520px;">
+    <h2 style="text-align:center; color:#ff5040;" id="crash-title">SORTIE FAILED</h2>
+    <p style="text-align:center;" id="crash-reason">TERRAIN STRIKE</p>
+    <div class="stat-grid" id="crash-stats"></div>
+    <div class="btn-row" style="justify-content:center;">
+      <button id="btn-retry">RETRY SORTIE</button>
+      <button class="secondary" id="btn-crash-map">MAP</button>
+    </div>
+  </div>
+</div>
+
+<!-- HELP -->
+<div class="screen hidden" id="help-screen">
+  <div class="card" style="max-width: 620px;">
+    <h2>HOW TO FLY</h2>
+    <div class="sub">THE LOOP: GATES → LOCK → FIRE → LAND → GRADE</div>
+    <p><b>Fly through gold rings</b> — the next ring is labelled with its distance
+    (G-02 523m). The flight-path vector (circle + wings) shows where you are
+    actually going; put it in the ring. <b>Strike:</b> put a warship or radar
+    tower inside the nose diamond and hold it — the lock builds, the diamond
+    goes solid red and the HUD flashes SHOOT. Press SPACE to fire; the missile
+    steers itself in and the target burns. One kill is +1000.</p>
+    <p><b>Landings:</b> flaps down, gear down, throttle back, sink under 200 fpm,
+    on the centreline — PAPI shows 2 red + 2 white on the glidepath, PAPI LOCK
+    when you are on it. <b>Watch the numbers:</b> fuel burns with throttle
+    (twice as fast in afterburner), over 6.0 G damages the airframe, and the
+    storm front (ETA timer) closes the coast. In the storm, rain slants with
+    the wind and lightning is real — don't fly through the front.</p>
+    <div class="btn-row"><button id="btn-help-close">CLOSE</button></div>
+  </div>
+</div>
+
+<script type="importmap">{"imports": {"three": "./vendor/three.module.min.js"}}</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

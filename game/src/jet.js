@@ -1,0 +1,166 @@
+// Falcon-7: a grey-and-orange fighter jet, built as a machine, not a box.
+// Tapered fuselage sections, swept delta wings with dihedral, twin tail
+// fins, a bubble canopy, wing-rail missiles, and a lit afterburner.
+// From chase view it must read at 1/4-1/3 of the frame.
+import * as THREE from 'three';
+
+function mat(color, rough = 0.45, metal = 0.25) {
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+}
+
+// Delta wing planform (top view): root chord long, tip chord short,
+// leading edge swept back. Extruded thin, laid flat.
+function deltaWing(span, rootChord, tipChord, sweepBack) {
+  const s = new THREE.Shape();
+  s.moveTo(0, rootChord / 2);
+  s.lineTo(span, rootChord / 2 - sweepBack);
+  s.lineTo(span, rootChord / 2 - sweepBack - tipChord);
+  s.lineTo(0, -rootChord / 2);
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.16, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // shape plane (x,y) -> ground plane (x,z)
+  return geo;
+}
+
+export function buildJet() {
+  const g = new THREE.Group();
+  const grey = mat(0x8a929e);
+  const darkGrey = mat(0x4a515c, 0.5, 0.35);
+  const orange = mat(0xe85d10, 0.4, 0.2);
+  const white = mat(0xf2efe8, 0.4, 0.2);
+  const dark = mat(0x23262c, 0.6, 0.4);
+  const glass = new THREE.MeshStandardMaterial({ color: 0x0e1a28, roughness: 0.12, metalness: 0.7 });
+
+  // fuselage: nose cone -> forward -> mid -> tail taper (4 sections)
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.95, 2.6, 12), darkGrey);
+  nose.rotation.x = -Math.PI / 2; nose.position.set(0, 0, 4.6);
+  const fwd = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.15, 2.4, 12), grey);
+  fwd.rotation.x = Math.PI / 2; fwd.position.set(0, 0, 2.1);
+  const mid = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.0, 3.2, 12), grey);
+  mid.rotation.x = Math.PI / 2; mid.position.set(0, 0, -0.8);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.42, 2.6, 12), darkGrey);
+  tail.rotation.x = Math.PI / 2; tail.position.set(0, 0.1, -3.7);
+  // orange cheatline stripe along the fuselage
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.32, 0.26, 5.4), orange);
+  stripe.position.set(0, -0.12, 1.0);
+  // belly stripe
+  const belly = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.2, 4.8), dark);
+  belly.position.set(0, -0.92, 0.8);
+  // bubble canopy glass
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.5), glass);
+  canopy.scale.set(0.85, 0.6, 1.6);
+  canopy.position.set(0, 0.6, 2.9);
+  canopy.rotation.x = -0.2;
+  g.add(nose, fwd, mid, tail, stripe, belly, canopy);
+
+  // swept delta wings with dihedral + orange tips
+  const wingGeoL = deltaWing(6.4, 4.6, 1.1, 3.4);
+  const wingL = new THREE.Mesh(wingGeoL, grey);
+  wingL.scale.x = -1; // mirror to the left
+  wingL.position.set(0, 0.1, 0.9);
+  wingL.rotation.z = -0.05;
+  const wingR = new THREE.Mesh(wingGeoL, grey);
+  wingR.position.set(0, 0.1, 0.9);
+  wingR.rotation.z = 0.05;
+  g.add(wingL, wingR);
+  for (const side of [-1, 1]) {
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 1.2), orange);
+    tip.position.set(side * 6.2, 0.42, -1.6);
+    tip.rotation.y = side * 0.5;
+    g.add(tip);
+    // wing-rail missile (grey dart under each wing)
+    const rail = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 2.2, 8), white);
+    body.rotation.x = Math.PI / 2;
+    const tipCone = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 8), orange);
+    tipCone.rotation.x = Math.PI / 2; tipCone.position.z = 1.35;
+    rail.add(body, tipCone);
+    rail.position.set(side * 3.4, -0.35, 0.4);
+    g.add(rail);
+  }
+
+  // twin tail fins (canted out) + tailplanes
+  for (const side of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.1, 1.7), orange);
+    fin.position.set(side * 0.85, 1.15, -4.3);
+    fin.rotation.x = 0.3;
+    fin.rotation.z = -side * 0.28;
+    g.add(fin);
+    const stab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.14, 1.2), grey);
+    stab.position.set(side * 1.3, 0.25, -4.2);
+    stab.rotation.y = side * 0.35;
+    g.add(stab);
+  }
+
+  // afterburner: glowing nozzle cone + additive flame + point light.
+  // setAfterburner(level) drives it: 0 = off, 1 = full burner.
+  const nozzle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.55, 0.42, 0.9, 12, 1, true),
+    new THREE.MeshStandardMaterial({ color: 0x30343a, roughness: 0.4, metalness: 0.7, side: THREE.DoubleSide }),
+  );
+  nozzle.rotation.x = Math.PI / 2; nozzle.position.set(0, 0.1, -5.1);
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55, 3.4, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x7ab8ff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  flame.rotation.x = Math.PI / 2; flame.position.set(0, 0.1, -6.6);
+  const flameCore = new THREE.Mesh(
+    new THREE.ConeGeometry(0.28, 2.2, 10, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  flameCore.rotation.x = Math.PI / 2; flameCore.position.set(0, 0.1, -6.0);
+  const abLight = new THREE.PointLight(0x6aa8ff, 0, 90, 1.6);
+  abLight.position.set(0, 0.1, -6.5);
+  g.add(nozzle, flame, flameCore, abLight);
+
+  // nav lights: red left, green right — the model is yawed PI from the
+  // flight direction, so local -X is the world's right wing (green)
+  for (const side of [-1, 1]) {
+    const nav = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 8, 6),
+      new THREE.MeshBasicMaterial({ color: side < 0 ? 0x20ff60 : 0xff2020 }),
+    );
+    nav.position.set(side * 6.4, 0.35, -1.6);
+    g.add(nav);
+  }
+  const tailLight = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  tailLight.position.set(0, 0.5, -5.0);
+  g.add(tailLight);
+
+  // retractable gear: two mains + nose wheel
+  const gear = new THREE.Group();
+  for (const side of [-1, 1]) {
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.1, 6), dark);
+    strut.position.set(side * 1.5, -1.25, 1.2);
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.3, 10), dark);
+    wheel.rotation.z = Math.PI / 2; wheel.position.set(side * 1.5, -1.8, 1.2);
+    gear.add(strut, wheel);
+  }
+  const noseStrut = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.0, 6), dark);
+  noseStrut.position.set(0, -1.2, 3.6);
+  const noseWheel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 10), dark);
+  noseWheel.rotation.z = Math.PI / 2; noseWheel.position.set(0, -1.7, 3.6);
+  gear.add(noseStrut, noseWheel);
+  g.add(gear);
+
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; } });
+  flame.castShadow = false; flameCore.castShadow = false;
+
+  let abLevel = 0;
+  return {
+    group: g,
+    gear,
+    setAfterburner(level, t) {
+      abLevel = level;
+      const flick = 1 + 0.12 * Math.sin(t * 31) + 0.07 * Math.sin(t * 57);
+      flame.visible = level > 0.03;
+      flameCore.visible = level > 0.03;
+      const s = (0.25 + 0.75 * level) * flick;
+      flame.scale.set(s, s, 1 + 0.9 * level);
+      flameCore.scale.set(s, s, 1 + 0.7 * level);
+      flame.material.opacity = 0.25 + 0.6 * level;
+      abLight.intensity = level * 60 * flick;
+    },
+    get afterburner() { return abLevel; },
+  };
+}
