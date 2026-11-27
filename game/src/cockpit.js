@@ -13,6 +13,17 @@
 // and the combiner adds the yellow RECON gate ring with live readouts.
 import * as THREE from 'three';
 
+// Ronde 5 (ref-cockpit-clouds, Lyso: panel bawah "persegi panjang,
+// kesannya ditempel"): the panel's top edge is a COSINE ARCH, not a
+// straight line — centre 4 px, sides 56 px, following the canopy bow
+// (the bow's own circle passes through the arch's ends, so the panel
+// meets the pillar rails instead of cutting across them). One function
+// drives BOTH the SVG body path and the switch/lamp row offsets, so
+// the rows can never float above or sink below the lip.
+export function panelArchY(x) {
+  return 30 - 26 * Math.cos((Math.PI * (x - 640)) / 640);
+}
+
 export class Cockpit {
   constructor(root) {
     this.root = root;
@@ -93,6 +104,30 @@ export class Cockpit {
     this.panel.className = 'cockpit-panel';
     root.appendChild(this.panel);
 
+    // Ronde 5: the ARCHED panel body. The div itself is transparent; this
+    // SVG is the panel — a filled path whose top edge is panelArchY()
+    // sampled every 64 px (centre 4, sides 56), with a warm lip highlight
+    // tracing the same curve and a 3 px frame-grey edge. It meets the
+    // pillar rails (the bow's circle passes through the arch's ends) and
+    // tapers at the sides, so the panel reads as one sculpted tub with
+    // the canopy — not a rectangle pasted over the scene. The displays
+    // sit above it (z-index 1, see index.html); the switch/lamp rows
+    // ride the same curve via layoutArch().
+    const body = document.createElement('div');
+    body.className = 'cockpit-panel-body';
+    const pts = [];
+    for (let x = 0; x <= 1280; x += 64) pts.push([x, Math.round(panelArchY(x))]);
+    const topEdge = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
+    const bodyD = `M0,312 ${pts.map(([x, y]) => `L${x},${y}`).join(' ')} L1280,312 Z`;
+    body.innerHTML = `<svg viewBox="0 0 1280 312" preserveAspectRatio="none">
+      <defs><linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#232b38"/><stop offset="1" stop-color="#12161d"/>
+      </linearGradient></defs>
+      <path class="panel-arch-body" d="${bodyD}" fill="url(#panelGrad)" stroke="#3a4552" stroke-width="3"/>
+      <path class="panel-arch-lip" d="${topEdge}" fill="none" stroke="rgba(255,244,214,0.35)" stroke-width="2.5"/>
+    </svg>`;
+    this.panel.appendChild(body);
+
     // rev: MFD first in the flex row, so the radar sits LEFT like the
     // reference — it is drawn as a circular TAC RADAR scope (see drawMfd).
     // Ronde 2: taller canvas (210) so the scope can grow and the text can
@@ -100,22 +135,28 @@ export class Cockpit {
     // strip of small dark screens. Ronde 3: 224 tall, margin-top 38 (the
     // lamp row moves up to 24) so the displays eat the dead band at the
     // panel bottom; the button strip below covers only empty canvas.
+    // Ronde 5: 200 tall, margin-top 92 — the MFD sits BELOW the arch
+    // (the arch at the MFD's x is ~44) and above the button strip, which
+    // now starts at x 290 so it never hides behind the scope.
     this.mfdCanvas = document.createElement('canvas');
     this.mfdCanvas.className = 'cockpit-mfd';
     this.mfdCanvas.width = 260;
-    this.mfdCanvas.height = 224;
-    this.mfdCanvas.style.marginTop = '38px';
+    this.mfdCanvas.height = 200;
+    this.mfdCanvas.style.marginTop = '92px';
     this.panel.appendChild(this.mfdCanvas);
 
     // gauge canvas: 8 gauges (ronde 2: 740 wide, r 56, taller 210 — the
     // strip is bigger and brighter; see draw() for the layout).
     // Ronde 3: 224 tall like the MFD, so the whole strip reads as one
     // lit display unit instead of dark circles on a black slab.
+    // Ronde 5: margin-top 47 — the centre gauges sit just under the
+    // arch's crown (arch ~4 at the centre) with the switch row riding
+    // the curve above them.
     this.gaugeCanvas = document.createElement('canvas');
     this.gaugeCanvas.className = 'cockpit-gauges';
     this.gaugeCanvas.width = 740;
     this.gaugeCanvas.height = 224;
-    this.gaugeCanvas.style.marginTop = '38px';
+    this.gaugeCanvas.style.marginTop = '47px';
     this.panel.appendChild(this.gaugeCanvas);
 
     // rev: ENG / FUEL / SYS — the reference's right display: THR / FUEL /
@@ -126,7 +167,7 @@ export class Cockpit {
     // screen, not a dark box. (Inline styles: index.html is out of bounds.)
     this.engPanel = document.createElement('div');
     this.engPanel.className = 'cockpit-eng';
-    this.engPanel.style.marginTop = '38px';
+    this.engPanel.style.marginTop = '70px';
     this.engPanel.style.background = '#0a1a12';
     this.engPanel.style.border = '1px solid #2a7a4a';
     this.engPanel.style.boxShadow = '0 0 16px rgba(75,232,138,0.28)';
@@ -172,10 +213,11 @@ export class Cockpit {
     this.panel.appendChild(this.switchRow);
 
     // v4: warning lamp strip — WARN / FIRE / HYD / ELEC / OXY / GEAR
-    // (ronde 3: top 24 so it clears the displays' new 38px margin-top)
+    // Ronde 5: container top 0; layoutArch() translateY's each lamp onto
+    // the panel arch, 26 px below the switch row's curve.
     this.lampRow = document.createElement('div');
     this.lampRow.className = 'cockpit-lamps';
-    this.lampRow.style.top = '24px';
+    this.lampRow.style.top = '0px';
     this.lamps = {};
     for (const [key, label, cls] of [
       ['WARN', 'WARN', 'amber'], ['FIRE', 'FIRE', 'red'], ['HYD', 'HYD', 'green'],
@@ -196,7 +238,7 @@ export class Cockpit {
     // status chips keep the right corner). The placard text survives
     // as the strip's leading label.
     const btnStrip = document.createElement('div');
-    btnStrip.style.cssText = 'position:absolute;bottom:3px;left:14px;right:250px;height:24px;display:flex;gap:4px;align-items:center;';
+    btnStrip.style.cssText = 'position:absolute;bottom:3px;left:290px;right:250px;height:24px;display:flex;gap:4px;align-items:center;';
     const stripLabel = document.createElement('span');
     stripLabel.textContent = 'FALCON-7 · SN 07';
     stripLabel.style.cssText = 'font-size:9px;letter-spacing:1px;color:#5a6472;margin-right:6px;white-space:nowrap;';
@@ -252,6 +294,27 @@ export class Cockpit {
 
   show(on) { this.root.style.display = on ? 'block' : 'none'; }
 
+  // Ronde 5: ride the panel arch — each switch/lamp item is translateY'd
+  // onto panelArchY() at its own centre-x, so the control rows curve with
+  // the panel lip (centre high, sides low) instead of cutting straight
+  // across it. Re-runs when the panel width changes (resize); translateY
+  // is vertical-only, so re-measuring x after a previous run is stable.
+  layoutArch() {
+    const panelRect = this.panel.getBoundingClientRect();
+    if (!panelRect.width) return;
+    const scale = panelRect.width / 1280;
+    const place = (els, lift) => {
+      for (const el of els) {
+        const r = el.getBoundingClientRect();
+        const cx = (r.left - panelRect.left + r.width / 2) / scale;
+        el.style.transform = `translateY(${panelArchY(cx) + lift}px)`;
+      }
+    };
+    place(Object.values(this.switches), 4); // just under the lip
+    place(Object.values(this.lamps), 26);   // one row below the switches
+    this._archW = panelRect.width;
+  }
+
   gauge(x, cx, cy, r, label, draw) {
     x.save();
     x.translate(cx, cy);
@@ -292,6 +355,8 @@ export class Cockpit {
   }
 
   draw(flight, papiState, lockState, targets, camera, ultraOn, runner) {
+    // Ronde 5: keep the control rows on the panel arch (re-layout on resize).
+    if (!this._archW || Math.abs(this.panel.clientWidth - this._archW) > 2) this.layoutArch();
     const x = this.gaugeCanvas.getContext('2d');
     const W = this.gaugeCanvas.width, H = this.gaugeCanvas.height;
     x.clearRect(0, 0, W, H);
@@ -466,7 +531,7 @@ export class Cockpit {
   // Same tactical content as the v4 MFD (live targets + ally + list).
   drawMfd(flight, targets, lk, ultraOn) {
     const x = this.mfdCanvas.getContext('2d');
-    const W = 260, H = 224;
+    const W = 260, H = 200;
     x.clearRect(0, 0, W, H);
     // Ronde 3: a lit green-screen face (was near-black #071410) — the
     // reference's left MFD is a bright green display, not a dark hole.
@@ -478,7 +543,7 @@ export class Cockpit {
     x.font = 'bold 13px monospace'; x.textAlign = 'left';
     x.fillStyle = '#4be88a'; x.fillText('TAC RADAR · 4 KM', 8, 18);
     x.fillStyle = '#8ef0ff'; x.textAlign = 'right'; x.fillText('RNG 4KM', W - 8, 18);
-    const cx = W / 2, cy = 116, R = 74;
+    const cx = W / 2, cy = 106, R = 68;
     // scope face
     x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2);
     x.fillStyle = '#0c2a18'; x.fill();
@@ -534,7 +599,7 @@ export class Cockpit {
     x.beginPath(); x.moveTo(cx, cy - 7); x.lineTo(cx + 5, cy + 6); x.lineTo(cx - 5, cy + 6); x.closePath(); x.fill();
     // target list (2 rows fit under the scope)
     x.font = '12px monospace'; x.textAlign = 'left';
-    let ly = 196;
+    let ly = 184;
     const rows = [];
     if (targets) {
       for (const t of targets) {
@@ -552,7 +617,7 @@ export class Cockpit {
       x.fillStyle = '#ffd76a';
       x.fillText(tag, W - 8, ly);
       x.textAlign = 'left';
-      ly += 13;
+      ly += 12;
     }
   }
 

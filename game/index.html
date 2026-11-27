@@ -105,21 +105,31 @@
      are big lit screens, not a dark strip. Width is capped by the 1280
      frame (260 + 740 + 230 + gaps + padding = 1280 exactly), so the
      growth is height + brightness + font size, not width. */
-  .cockpit-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 280px;
-    background: linear-gradient(180deg, #1e2531 0%, #12161d 100%);
-    border-top: 3px solid #3a4552; display: flex; align-items: flex-start; padding: 10px 14px 0; gap: 10px; }
-  /* v4: rivets along the panel top edge + faint wear streaks */
-  .cockpit-panel::before { content: ''; position: absolute; top: 4px; left: 12px; right: 12px; height: 6px;
-    background-image: radial-gradient(circle, #4a5566 1.6px, transparent 1.8px);
-    background-size: 46px 6px; background-repeat: repeat-x; opacity: 0.8; }
+  /* Ronde 5 (ref-cockpit-clouds, Lyso: panel bawah "persegi panjang,
+     kesannya ditempel"): the panel is NO LONGER a rectangle — its body
+     is an SVG arch (see .cockpit-panel-body in cockpit.js) whose top
+     edge rises 52 px at the centre and tapers at the sides, following
+     the canopy bow. The div itself is transparent; the old straight
+     border-top + rivet strip are gone. Panel height 280 -> 312 so the
+     arch + rows + displays all fit. */
+  .cockpit-panel { position: absolute; left: 0; right: 0; bottom: 0; height: 312px;
+    background: transparent;
+    display: flex; align-items: flex-start; padding: 10px 14px 0; gap: 10px; }
+  /* Ronde 5: the arched panel body — an SVG drawn by cockpit.js (same
+     cosine arch the switch/lamp rows follow). It paints behind every
+     display (z-index 0); the displays sit above it. */
+  .cockpit-panel-body { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .cockpit-panel-body svg { width: 100%; height: 100%; display: block; }
   .cockpit-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none;
     background: repeating-linear-gradient(90deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 90px); }
-  .cockpit-gauges { flex: 0 0 auto; margin-top: 40px; box-shadow: 0 0 16px rgba(126,232,255,0.16); border-radius: 4px; }
-  .cockpit-mfd { flex: 0 0 auto; margin-top: 40px; border-radius: 4px;
+  .cockpit-gauges { flex: 0 0 auto; margin-top: 40px; box-shadow: 0 0 16px rgba(126,232,255,0.16); border-radius: 4px; position: relative; z-index: 1; }
+  .cockpit-mfd { flex: 0 0 auto; margin-top: 40px; border-radius: 4px; position: relative; z-index: 1;
     box-shadow: 0 0 16px rgba(75,232,138,0.28); border: 1px solid #2a7a4a; }
-  /* rev: the ENG / FUEL / SYS display — bars over the throttle quadrant. */
+  /* rev: the ENG / FUEL / SYS display — bars over the throttle quadrant.
+     Ronde 5: position relative + z-index 1 so it paints above the arched
+     SVG panel body. */
   .cockpit-eng { flex: 0 0 230px; margin-top: 40px; background: #10151d;
-    border: 1px solid #3a4552; border-radius: 4px; padding: 10px 12px;
+    border: 1px solid #3a4552; border-radius: 4px; padding: 10px 12px; position: relative; z-index: 1;
     display: flex; flex-direction: column; gap: 7px; box-shadow: 0 0 14px rgba(255,215,106,0.10); }
   .eng-title { font-size: 13px; font-weight: bold; letter-spacing: 1px; color: #4be88a; }
   .eng-row { display: flex; align-items: center; gap: 8px; }
@@ -130,22 +140,35 @@
   .cockpit-eng .cockpit-quadrant { margin: 2px 0 0; }
   .cockpit-eng .cq-title { font-size: 11px; }
   .cockpit-eng .cq-levers { justify-content: center; }
-  .cockpit-eng .cq-track { height: 64px; }
-  .cockpit-tgt { position: absolute; top: 6px; right: 18px; display: flex; gap: 14px; align-items: center;
+  .cockpit-eng .cq-track { height: 56px; }
+  /* Ronde 5: the target strip sits just below the panel arch on the
+     right (the arch there is ~46-56 px), not at the very top where it
+     would float above the body.
+     Ronde 5b: right 18 -> 130 — the HUD's altitude tape box
+     ([1184,445,1256,469] frame) used to swallow the "—" range and clip
+     "LOCK —" in half. The strip now ends at x 1150, clear of the box,
+     still above the ENG panel (top 478). */
+  .cockpit-tgt { position: absolute; top: 62px; right: 130px; display: flex; gap: 14px; align-items: center; z-index: 2;
     font-size: 13px; font-weight: bold; color: #ffb020; }
   .cockpit-tgt .tgt-name { color: #fff; }
   .cockpit-tgt .tgt-lock.on { color: var(--ok); }
   .cockpit-tgt .tgt-shoot { display: none; color: var(--danger); border: 1px solid var(--danger);
     padding: 1px 8px; border-radius: 3px; animation: blink 0.5s steps(2) infinite; }
-  .cockpit-switches { position: absolute; top: 6px; left: 18px; right: 340px; display: flex; gap: 10px; }
+  /* Ronde 5b: the row starts at x 104, not 18 — the HUD's airspeed
+     tape box ([24,445,96,469] frame) sits over the panel's left corner
+     and used to swallow NAV and clip LAND to "AND". Gap 10 -> 4 so the
+     12 switches still fit in the shorter span. layoutArch() re-measures
+     the real x positions, so the arch offsets follow automatically. */
+  .cockpit-switches { position: absolute; top: 0; left: 104px; right: 340px; display: flex; gap: 4px; z-index: 2; }
   .cockpit-switch { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aab4c2; }
   .cockpit-switch .sw-dot { width: 11px; height: 11px; border-radius: 50%; background: #333; border: 1px solid #555; }
   .cockpit-switch.lit .sw-dot { background: var(--ok); box-shadow: 0 0 7px var(--ok); }
   .cockpit-switch.lit { color: #d8e8d8; }
   .cockpit-switch.eject .sw-label { color: #ff5040; font-weight: bold; }
   .cockpit-switch.eject .sw-dot { border-color: #ff5040; }
-  /* v4: warning lamp strip under the switches */
-  .cockpit-lamps { position: absolute; top: 26px; left: 18px; display: flex; gap: 14px; }
+  /* v4: warning lamp strip — Ronde 5: same arch ride as the switches
+     (container top 0, items translateY'd by cockpit.js). */
+  .cockpit-lamps { position: absolute; top: 0; left: 18px; display: flex; gap: 14px; z-index: 2; }
   .cockpit-lamp { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #aab4c2; }
   .cockpit-lamp .lamp-dot { width: 12px; height: 12px; border-radius: 2px; background: #2a2f38; border: 1px solid #555; }
   .cockpit-lamp.amber.on .lamp-dot { background: #ffb020; box-shadow: 0 0 8px #ffb020; }
@@ -161,7 +184,7 @@
   .cq-lever { display: flex; flex-direction: column; align-items: center; gap: 4px; }
   .cq-track { width: 14px; height: 110px; background: #0a0d12; border: 1px solid #3a4552; border-radius: 7px; position: relative; }
   .cq-knob { position: absolute; left: -4px; width: 20px; height: 14px; background: #e85d10; border-radius: 3px; bottom: 50%; }
-  .cockpit-chips { position: absolute; bottom: 12px; right: 18px; display: flex; flex-direction: row; gap: 6px; align-items: flex-end; }
+  .cockpit-chips { position: absolute; bottom: 6px; right: 18px; display: flex; flex-direction: row; gap: 6px; align-items: flex-end; }
 
   /* ---------- Screens ---------- */
   .screen { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
